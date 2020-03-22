@@ -1,0 +1,8 @@
+opencv-python
+Pillow
+imgaug
+torch
+pandas
+numpy
+matplotlib
+requests
