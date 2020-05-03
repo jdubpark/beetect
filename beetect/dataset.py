@@ -13,7 +13,7 @@ from beetect.utils import Map
 class BeeDataset(Dataset):
     """Bee dataset pulled from multiple videos"""
 
-    def __init__(self, annot_file, img_dir, transform=None, device):
+    def __init__(self, annot_file, img_dir, device, transform=None):
         """
         Args:
             annot_file (string): Path to the annotation file
