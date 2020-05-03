@@ -31,8 +31,8 @@ parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                     help='manual epoch number (useful on restarts)')
-parser.add_argument('-b', '--batch-size', default=128, type=int,
-                    metavar='N',
+parser.add_argument('-b', '--batch-size', dest='batch_size',
+                    default=128, type=int, metavar='N',
                     help='mini-batch size (default: 128), this is the total '
                          'batch size of all GPUs on the current node when '
                          'using Data Parallel or Distributed Data Parallel')
@@ -70,11 +70,12 @@ def main():
 
     # prepare dataset
     annot_file = args.data+'/annot/hive-entrance-1-1min.xml'
-    img_dir = args.data+'/video/frame/hive-entrance-1-1min/'
+    img_dir = args.data+'/frame/hive-entrance-1-1min/'
 
     dataset = Map({
         x: BeeDataset(annot_file=annot_file, img_dir=img_dir,
-                      transform=get_transform(train=(x is 'train')))
+                      transform=get_transform(train=(x is 'train')),
+                      device=device)
         for x in ['train', 'val']
     })
 
@@ -170,8 +171,9 @@ def train(train_loader, model, criterion, optimizer, epoch, device, args):
         # measure data loading time
         data_time.update(time.time() - end)
 
-        # images = images.to(device)
-        # targets = targets.to(device)
+        # images = [img.to(device) for img in images]
+        # for target in targets:
+        #     target.boxes = [tbox.to(device) for tbox in target]
 
         # compute output
         output = model(images, targets)
@@ -212,8 +214,8 @@ def validate(val_loader, model, criterion, device, args):
     with torch.no_grad():
         end = time.time()
         for i, (images, targets) in enumerate(val_loader):
-            images = [img.to(device) for img in images]
-            targets = [tg.to(device) for tg in targets]
+            # images = [img.to(device) for img in images]
+            # targets = [tg.to(device) for tg in targets]
 
             # compute output
             output = model(images)
