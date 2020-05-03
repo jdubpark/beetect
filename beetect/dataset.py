@@ -4,8 +4,6 @@ from PIL import Image
 
 import torch
 from torch.utils.data import Dataset, DataLoader
-import torchvision.transforms as T
-import torchvision.transforms.functional as TF
 from imgaug.augmentables.bbs import BoundingBox, BoundingBoxesOnImage
 from beetect.utils import Map
 
@@ -13,7 +11,7 @@ from beetect.utils import Map
 class BeeDataset(Dataset):
     """Bee dataset pulled from multiple videos"""
 
-    def __init__(self, annot_file, img_dir, device, transform=None):
+    def __init__(self, annot_file, img_dir, transform=None):
         """
         Args:
             annot_file (string): Path to the annotation file
@@ -22,7 +20,6 @@ class BeeDataset(Dataset):
         self.frame_list, self.frame_annots = self.read_annot_file(annot_file)
         self.img_dir = img_dir
         self.transform = transform
-        self.device = device
 
     def __len__(self):
         return len(self.frame_list)
@@ -61,13 +58,13 @@ class BeeDataset(Dataset):
 
         target = Map({})
         target.boxes = boxes
-        target.lables = labels
-        target.image_id = frame
+        target.labels = labels
+        target.image_id = torch.tensor([int(frame)])
 
         if self.transform:
             image, target = self.transform(image, target)
 
-        return image.to(self.device), target.to(self.device)
+        return image, target
 
     def read_annot_file(self, annot_file):
         """

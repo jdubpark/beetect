@@ -74,14 +74,13 @@ def main():
 
     dataset = Map({
         x: BeeDataset(annot_file=annot_file, img_dir=img_dir,
-                      transform=get_transform(train=(x is 'train')),
-                      device=device)
+                      transform=get_transform(train=(x is 'train')))
         for x in ['train', 'val']
     })
 
     # split the dataset to train and val
     # indices = torch.randperm(len(dataset.train)).tolist()
-    indices = range(len(dataset.train))
+    indices = list(range(len(dataset.train)))
     dataset.train = Subset(dataset.train, indices[:-args.val_size])
     dataset.val = Subset(dataset.val, indices[-args.val_size:])
 
@@ -125,7 +124,7 @@ def main():
             print("=> no checkpoint found at '{}'".format(args.resume))
 
     if args.evaluate:
-        validate(val_loader, model, criterion, args)
+        validate(val_loader, model, criterion, device, args)
         return
 
     for epoch in range(args.start_epoch, args.epochs):
@@ -133,7 +132,7 @@ def main():
         train(data_loader.train, model, criterion, optimizer, epoch, device, args)
 
         # evaluate on val set
-        acc1 = validate(data_loader.val, model, criterion, device, args)
+        acc1 = validate(data_loader.val, model, criterion, args)
 
         # loss step after train and val (changed after PyTirch 1.1.0)
         lr_scheduler.step()
@@ -153,6 +152,10 @@ def main():
 
 
 def train(train_loader, model, criterion, optimizer, epoch, device, args):
+    """ Similar torchvision function is available
+    function: train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq)
+    source: https://github.com/pytorch/vision/blob/master/references/detection/engine.py#L13
+    """
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
@@ -167,13 +170,11 @@ def train(train_loader, model, criterion, optimizer, epoch, device, args):
     model.train()
 
     end = time.time()
-    for i, (images, targets) in enumerate(train_loader):
+    for batch_idx, batch in enumerate(train_loader):
         # measure data loading time
         data_time.update(time.time() - end)
 
-        # images = [img.to(device) for img in images]
-        # for target in targets:
-        #     target.boxes = [tbox.to(device) for tbox in target]
+        images, targets = convert_batch_to_tensor(batch, device=device)
 
         # compute output
         output = model(images, targets)
@@ -194,8 +195,8 @@ def train(train_loader, model, criterion, optimizer, epoch, device, args):
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if i % args.print_freq == 0:
-            progress.display(i)
+        if batch_idx % args.print_freq == 0:
+            progress.display(batch_idx)
 
 
 def validate(val_loader, model, criterion, device, args):
@@ -213,9 +214,8 @@ def validate(val_loader, model, criterion, device, args):
 
     with torch.no_grad():
         end = time.time()
-        for i, (images, targets) in enumerate(val_loader):
-            # images = [img.to(device) for img in images]
-            # targets = [tg.to(device) for tg in targets]
+        for batch_idx, batch in enumerate(val_loader):
+            images, targets = convert_batch_to_tensor(batch, device=device)
 
             # compute output
             output = model(images)
@@ -231,8 +231,8 @@ def validate(val_loader, model, criterion, device, args):
             batch_time.update(time.time() - end)
             end = time.time()
 
-            if i % args.print_freq == 0:
-                progress.display(i)
+            if batch_idx % args.print_freq == 0:
+                progress.display(batch_idx)
 
         # TODO: this should also be done with the ProgressMeter
         print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
@@ -308,6 +308,23 @@ def accuracy(output, target, topk=(1,)):
             correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
             res.append(correct_k.mul_(100.0 / batch_size))
         return res
+
+
+def convert_batch_to_tensor(batch, device):
+    """Convert a batch (list) of images and targets to tensor CPU/GPU
+    reference: https://github.com/pytorch/vision/blob/master/references/detection/engine.py#L27
+    L27: images = list(image.to(device) for image in images)
+    L28: targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+    """
+    batch_images, batch_targets = batch
+
+    # concat list of image tensors into a tensor at dim 0
+    # batch_images = torch.cat(batch_images, dim=0)
+
+    images = list(image.to(device) for image in batch_images)
+    targets = [{k: v.to(device) for k, v in t.items()} for t in batch_targets]
+
+    return images, targets
 
 
 def collate_fn(batch):
