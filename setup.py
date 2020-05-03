@@ -4,15 +4,16 @@ setup(
     name='beetect',
     version='1.0',
     packages=find_packages(),
-    python_requires=">=3.6",
+    python_requires='>=3.6',
     install_requires=[
-        "Pillow",
-        "opencv-python",
-        "imgaug",
-        "torch",
-        "pandas",
-        "numpy",
-        "matplotlib",
-        "requests"
+        'Pillow',
+        'opencv-python',
+        'imgaug',
+        'torch',
+        'torchvision',
+        'pandas',
+        'numpy',
+        'matplotlib',
+        'requests'
     ],
 )
