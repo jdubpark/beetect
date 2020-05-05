@@ -56,8 +56,13 @@ parser.add_argument('--resume', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
 parser.add_argument('-p', '--print-freq', default=5, type=int,
                     metavar='N', help='print frequency (default: 5)')
+<<<<<<< HEAD
 parser.add_argument('--anomaly', action='store_true',
                     help='Run train with torch.autograd.detect_anomaly')
+=======
+parser.add_argument('--anomaly', action='store_true', type=int,
+                    metavar='B', help='Run train with torch.autograd.detect_anomaly')
+>>>>>>> afcf5c6b019d493886b759da6010c3e151d42654
 
 
 def main():
@@ -171,10 +176,15 @@ def train(train_loader, model, optimizer, lr_scheduler, epoch, device, args):
         images, targets = convert_batch_to_tensor(batch, device=device)
 
         # compute output
+<<<<<<< HEAD
         with torch.autograd.set_detect_anomaly(mode=args.anomaly):
 
             # https://github.com/pytorch/vision/blob/master/references/detection/engine.py#L30
 
+=======
+        # https://github.com/pytorch/vision/blob/master/references/detection/engine.py#L30
+        with torch.autograd.detect_anomaly(args.anomaly):
+>>>>>>> afcf5c6b019d493886b759da6010c3e151d42654
             loss_dict = model(images, targets)
             print(batch_idx, loss_dict)
             loss = compute_total_loss(loss_dict)
