@@ -119,9 +119,9 @@ def main():
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
 
-    if args.evaluate:
-        validate(data_loader.val, model, device, args)
-        return
+    # if args.evaluate:
+    #     validate(data_loader.val, model, device, args)
+    #     return
 
     for epoch in range(args.start_epoch, args.epochs):
         # train for one epoch
@@ -202,7 +202,7 @@ def validate(val_loader, model, device, args):
         prefix='Validate: ')
 
     # switch to evaluate mode
-    model.eval()
+    # model.eval()
 
     with torch.no_grad():
         end = time.time()
