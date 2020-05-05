@@ -210,7 +210,7 @@ def validate(val_loader, model, device, args):
             images, targets = convert_batch_to_tensor(batch, device=device)
 
             # compute output
-            loss_dict = model(images)
+            loss_dict = model(images, targets)
             loss = compute_total_loss(loss_dict)
 
             # record loss
