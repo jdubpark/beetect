@@ -15,6 +15,22 @@ def resnet18(pretrained=True, num_classes=2, **kwargs):
     return model
 
     """
+    torchvision model forward()
+
+    Args:
+        images (list[Tensor]): images to be processed
+        targets (list[Dict[Tensor]]): ground-truth boxes present in the image (optional)
+    Returns:
+        result (list[BoxList] or dict[Tensor]): the output from the model.
+            During training, it returns a dict[Tensor] which contains the losses.
+            During testing, it returns list[BoxList] contains additional fields
+            like `scores`, `labels` and `mask` (for Mask R-CNN models).
+
+    To compute total loss
+    follow: https://github.com/pytorch/vision/blob/master/references/detection/engine.py#L30
+    """
+
+    """
     Below is for resnet18 without fpn
     """
     # model = resnet18(pretrained=True)

@@ -10,7 +10,7 @@ import torch.optim as O
 from torch.utils.data import Subset, DataLoader
 from beetect import BeeDataset, ImgAugTransform
 from beetect.utils import Map
-from beetect.scratchv1 import resnet18
+from beetect.scratchv1 import resnet18, utils
 
 model_names = ['resnet18']
 
@@ -56,8 +56,7 @@ parser.add_argument('--resume', default='', type=str, metavar='PATH',
 parser.add_argument('-p', '--print-freq', default=5, type=int,
                     metavar='N', help='print frequency (default: 5)')
 
-# pretty bad accuracy :/
-best_acc1 = 0
+best_loss = 0
 
 
 def main():
@@ -92,9 +91,6 @@ def main():
         for x in ['train', 'val']
     })
 
-    # loss function
-    criterion = nn.CrossEntropyLoss().cuda()
-
     # optimizer, take parameters directly since we are fine-tuning
     params = model.parameters() # [p for p in models.parameters() if p.requires_grad]
     optimizer = O.SGD(params, lr=args.lr,
@@ -115,7 +111,7 @@ def main():
             print("=> loading checkpoint '{}'".format(args.resume))
             checkpoint = torch.load(args.resume)
             args.start_epoch = checkpoint['epoch']
-            best_acc1 = checkpoint['best_acc1']
+            best_loss = checkpoint['best_loss']
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
             print("=> loaded checkpoint '{}' (epoch {})"
@@ -124,34 +120,31 @@ def main():
             print("=> no checkpoint found at '{}'".format(args.resume))
 
     if args.evaluate:
-        validate(val_loader, model, criterion, device, args)
+        validate(data_loader.val, model, device, args)
         return
 
     for epoch in range(args.start_epoch, args.epochs):
         # train for one epoch
-        train(data_loader.train, model, criterion, optimizer, epoch, device, args)
+        train(data_loader.train, model, optimizer, lr_scheduler, epoch, device, args)
 
         # evaluate on val set
-        acc1 = validate(data_loader.val, model, criterion, args)
+        loss = validate(data_loader.val, model, args)
 
-        # loss step after train and val (changed after PyTirch 1.1.0)
-        lr_scheduler.step()
-
-        # remember best acc@1 and save checkpoint
-        is_best = acc1 > best_acc1
-        best_acc1 = max(acc1, best_acc1)
+        # remember best loss and save checkpoint
+        is_best = loss > best_loss
+        best_loss = max(loss, best_loss)
 
         # save checkpoint
         cpt_meta = Map({})
         cpt_meta.arch = args.arch
         cpt_meta.epoch = epoch + 1
         cpt_meta.state_dict = model.state_dict()
-        cpt_meta.best_acc1 = best_acc1
+        cpt_meta.best_loss = best_loss
         cpt_meta.optimizer = optimizer
         save_checkpoint(cpt_meta, is_best)
 
 
-def train(train_loader, model, criterion, optimizer, epoch, device, args):
+def train(train_loader, model, optimizer, lr_scheduler, epoch, device, args):
     """ Similar torchvision function is available
     function: train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq)
     source: https://github.com/pytorch/vision/blob/master/references/detection/engine.py#L13
@@ -159,11 +152,9 @@ def train(train_loader, model, criterion, optimizer, epoch, device, args):
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
-    top1 = AverageMeter('Acc@1', ':6.2f')
-    top5 = AverageMeter('Acc@5', ':6.2f')
     progress = ProgressMeter(
         len(train_loader),
-        [batch_time, data_time, losses, top1, top5],
+        [batch_time, data_time, losses],
         prefix="Epoch: {}/{}".format(epoch, args.epochs - 1))
 
     # switch to train mode
@@ -177,19 +168,22 @@ def train(train_loader, model, criterion, optimizer, epoch, device, args):
         images, targets = convert_batch_to_tensor(batch, device=device)
 
         # compute output
-        output = model(images, targets)
-        loss = criterion(output, targets)
+        # https://github.com/pytorch/vision/blob/master/references/detection/engine.py#L30
+        loss_dict = model(images, targets)
+        loss = compute_total_loss(loss_dict)
 
-        # measure accuracy and record loss
-        acc1, acc5 = accuracy(output, targets, topk=(1, 5))
-        losses.update(loss.item(), images.size(0))
-        top1.update(acc1[0], images.size(0))
-        top5.update(acc5[0], images.size(0))
+        # reduce losses over all GPUs for logging purposes
+        loss_dict_reduced = utils.reduce_dict(loss_dict)
+        losses_reduced = sum(loss for loss in loss_dict_reduced.values())
 
-        # compute gradient and do SGD step
+        # record loss
+        losses.update(losses_reduced.item())
+
+        # compute gradient and do SGD step (lr scheduler is executed later)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        lr_scheduler.step()
 
         # measure elapsed time
         batch_time.update(time.time() - end)
@@ -199,14 +193,12 @@ def train(train_loader, model, criterion, optimizer, epoch, device, args):
             progress.display(batch_idx)
 
 
-def validate(val_loader, model, criterion, device, args):
+def validate(val_loader, model, device, args):
     batch_time = AverageMeter('Time', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
-    top1 = AverageMeter('Acc@1', ':6.2f')
-    top5 = AverageMeter('Acc@5', ':6.2f')
     progress = ProgressMeter(
         len(val_loader),
-        [batch_time, losses, top1, top5],
+        [batch_time, losses],
         prefix='Validate: ')
 
     # switch to evaluate mode
@@ -218,14 +210,11 @@ def validate(val_loader, model, criterion, device, args):
             images, targets = convert_batch_to_tensor(batch, device=device)
 
             # compute output
-            output = model(images)
-            loss = criterion(output, targets)
+            loss_dict = model(images)
+            loss = compute_total_loss(loss_dict)
 
-            # measure accuracy and record loss
-            acc1, acc5 = accuracy(output, targets, topk=(1, 5))
-            losses.update(loss.item(), images.size(0))
-            top1.update(acc1[0], images.size(0))
-            top5.update(acc5[0], images.size(0))
+            # record loss
+            losses.update(losses_reduced.item())
 
             # measure elapsed time
             batch_time.update(time.time() - end)
@@ -234,11 +223,15 @@ def validate(val_loader, model, criterion, device, args):
             if batch_idx % args.print_freq == 0:
                 progress.display(batch_idx)
 
-        # TODO: this should also be done with the ProgressMeter
-        print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
-              .format(top1=top1, top5=top5))
+    return losses.avg
 
-    return top1.avg
+
+def compute_total_loss(loss_dict):
+    """Sum of all losses in dict returned by torchvision Faster RCNN
+    Includes gradient - ready for backward()
+    """
+    total_loss = sum(loss for loss in loss_dict.values())
+    return total_loss
 
 
 def get_transform(train=False):
@@ -291,23 +284,6 @@ class ProgressMeter(object):
         num_digits = len(str(num_batches // 1))
         fmt = '{:' + str(num_digits) + 'd}'
         return '[' + fmt + '/' + fmt.format(num_batches) + ']'
-
-
-def accuracy(output, target, topk=(1,)):
-    """Computes the accuracy over the k top predictions for the specified values of k"""
-    with torch.no_grad():
-        maxk = max(topk)
-        batch_size = target.size(0)
-
-        _, pred = output.topk(maxk, 1, True, True)
-        pred = pred.t()
-        correct = pred.eq(target.view(1, -1).expand_as(pred))
-
-        res = []
-        for k in topk:
-            correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
-            res.append(correct_k.mul_(100.0 / batch_size))
-        return res
 
 
 def convert_batch_to_tensor(batch, device):
