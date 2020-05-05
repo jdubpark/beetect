@@ -172,12 +172,13 @@ def train(train_loader, model, optimizer, lr_scheduler, epoch, device, args):
         loss_dict = model(images, targets)
         loss = compute_total_loss(loss_dict)
 
-        # reduce losses over all GPUs for logging purposes
-        loss_dict_reduced = utils.reduce_dict(loss_dict)
-        losses_reduced = sum(loss for loss in loss_dict_reduced.values())
+        # # reduce losses over all GPUs for logging purposes
+        # loss_dict_reduced = utils.reduce_dict(loss_dict)
+        # losses_reduced = sum(loss for loss in loss_dict_reduced.values())
 
         # record loss
-        losses.update(losses_reduced.item())
+        # losses.update(losses_reduced.item())
+        losses.update(loss.item())
 
         # compute gradient and do SGD step (lr scheduler is executed later)
         optimizer.zero_grad()
@@ -214,7 +215,7 @@ def validate(val_loader, model, device, args):
             loss = compute_total_loss(loss_dict)
 
             # record loss
-            losses.update(losses_reduced.item())
+            losses.update(loss.item())
 
             # measure elapsed time
             batch_time.update(time.time() - end)
