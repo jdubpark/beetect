@@ -135,13 +135,13 @@ def main():
         best_loss = max(loss, best_loss)
 
         # save checkpoint
-        cpt_meta = Map({})
-        cpt_meta.arch = args.arch
-        cpt_meta.epoch = epoch + 1
-        cpt_meta.state_dict = model.state_dict()
-        cpt_meta.best_loss = best_loss
-        cpt_meta.optimizer = optimizer
-        save_checkpoint(cpt_meta, is_best)
+        save_checkpoint({
+            'arch': args.arch,
+            'epoch': epoch + 1,
+            'state_dict': model.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'loss': best_loss,
+        }, is_best)
 
 
 def train(train_loader, model, optimizer, lr_scheduler, epoch, device, args):
@@ -180,7 +180,7 @@ def train(train_loader, model, optimizer, lr_scheduler, epoch, device, args):
         # losses.update(losses_reduced.item())
         losses.update(loss.item())
 
-        # compute gradient and do SGD step (lr scheduler is executed later)
+        # compute gradient and do SGD and lr step
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
