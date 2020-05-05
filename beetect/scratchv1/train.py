@@ -56,8 +56,6 @@ parser.add_argument('--resume', default='', type=str, metavar='PATH',
 parser.add_argument('-p', '--print-freq', default=5, type=int,
                     metavar='N', help='print frequency (default: 5)')
 
-best_loss = 0
-
 
 def main():
     args = parser.parse_args()
@@ -122,6 +120,8 @@ def main():
     # if args.evaluate:
     #     validate(data_loader.val, model, device, args)
     #     return
+
+    best_loss = 0
 
     for epoch in range(args.start_epoch, args.epochs):
         # train for one epoch
