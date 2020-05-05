@@ -16,18 +16,19 @@ class ImgAugTransform:
         self.train = train
 
         aug = [
-            iaa.Resize(224),
+            # iaa.Resize(224),
+            iaa.CropToFixedSize(224, 244),
             iaa.Fliplr(0.5)
         ]
 
         if train:
             aug.extend([
-                iaa.Sometimes(0.25, iaa.GaussianBlur(sigma=(0, 3.0))),
-                # iaa.Multiply((1.2, 1.5)), # change brightness, doesn't affect BBs
+                # iaa.Sometimes(0.25, iaa.GaussianBlur(sigma=(0, 3.0))),
+                iaa.Sometimes(0.25, iaa.Multiply((1.2, 1.4))),
                 iaa.Affine(rotate=(-20, 20), mode='symmetric'),
-                iaa.Sometimes(0.25,
-                              iaa.OneOf([iaa.Dropout(p=(0, 0.1)),
-                                         iaa.CoarseDropout(0.1, size_percent=0.5)])),
+                # iaa.Sometimes(0.25,
+                #               iaa.OneOf([iaa.Dropout(p=(0, 0.1)),
+                #                          iaa.CoarseDropout(0.1, size_percent=0.5)])),
                 # iaa.AddToHueAndSaturation(value=(-10, 10), per_channel=True)
             ])
 
