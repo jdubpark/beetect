@@ -128,7 +128,7 @@ def main():
         train(data_loader.train, model, optimizer, lr_scheduler, epoch, device, args)
 
         # evaluate on val set
-        loss = validate(data_loader.val, model, args)
+        loss = validate(data_loader.val, model, device, args)
 
         # remember best loss and save checkpoint
         is_best = loss > best_loss
