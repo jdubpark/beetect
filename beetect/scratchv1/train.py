@@ -56,6 +56,8 @@ parser.add_argument('--resume', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
 parser.add_argument('-p', '--print-freq', default=5, type=int,
                     metavar='N', help='print frequency (default: 5)')
+parser.add_argument('--anomaly', action='store_true',
+                    help='Run train with torch.autograd.detect_anomaly')
 
 
 def main():
@@ -169,23 +171,27 @@ def train(train_loader, model, optimizer, lr_scheduler, epoch, device, args):
         images, targets = convert_batch_to_tensor(batch, device=device)
 
         # compute output
-        # https://github.com/pytorch/vision/blob/master/references/detection/engine.py#L30
-        loss_dict = model(images, targets)
-        loss = compute_total_loss(loss_dict)
+        with torch.autograd.set_detect_anomaly(mode=args.anomaly):
 
-        # # reduce losses over all GPUs for logging purposes
-        # loss_dict_reduced = utils.reduce_dict(loss_dict)
-        # losses_reduced = sum(loss for loss in loss_dict_reduced.values())
+            # https://github.com/pytorch/vision/blob/master/references/detection/engine.py#L30
 
-        # record loss
-        # losses.update(losses_reduced.item())
-        losses.update(loss.item())
+            loss_dict = model(images, targets)
+            print(batch_idx, loss_dict)
+            loss = compute_total_loss(loss_dict)
 
-        # compute gradient and do SGD and lr step
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        lr_scheduler.step()
+            # # reduce losses over all GPUs for logging purposes
+            # loss_dict_reduced = utils.reduce_dict(loss_dict)
+            # losses_reduced = sum(loss for loss in loss_dict_reduced.values())
+
+            # record loss
+            # losses.update(losses_reduced.item())
+            losses.update(loss.item())
+
+            # compute gradient and do SGD and lr step
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            lr_scheduler.step()
 
         # measure elapsed time
         batch_time.update(time.time() - end)
