@@ -197,11 +197,20 @@ def train(train_loader, model, optimizer, lr_scheduler, epoch, device, running_b
             # losses.update(losses_reduced.item())
             losses.update(loss.item())
 
+            a = list(model.parameters())[0].clone()
+
             # compute gradient and do SGD and lr step
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             lr_scheduler.step()
+
+            b = list(model.parameters())[0].clone()
+
+            print('Parameters being updated? {}'.format(torch.equal(a.data, b.data) is not True))
+
+            for param_group in optimizer.param_groups:
+                print('Parameters being updated? {}'.format(param_group['lr']))
 
         # measure elapsed time
         batch_time.update(time.time() - end)

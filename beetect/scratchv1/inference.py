@@ -21,15 +21,18 @@ def main():
     else:
         map_location='cpu'
 
-    checkpoint = torch.load('./model_best.pth.tar', map_location=map_location)
+    checkpoint = torch.load('./model_best.pt', map_location=map_location)
     model.load_state_dict(checkpoint['state_dict'])
     arch = checkpoint['arch']
     epoch = checkpoint['epoch']
     loss = checkpoint['loss']
 
+    # print(list(model.parameters()))
+
     model.eval()
 
-    image = Image.open('732.png')
+    # image = Image.open('732.png')
+    image = Image.open('bee1.jpg')
     input = T.ToTensor()(image).unsqueeze(0).to(device)
     image_np = np.asarray(image)
 
