@@ -9,14 +9,17 @@ setup(
         'Pillow',
         'opencv-python',
         'imgaug',
-        'torch',
-        'torchvision',
         'pandas',
         'numpy',
         'matplotlib',
-        'tensorboardX',
-        'fastai',
         'Cython',
         'pycocotools',
+        # says imgaug 0.4.0 is incompatible BUT requires imgaug 0.4.0
+        # or else it throws import error for imgaug.albumentations
+        'albumentations',
+        'torch',
+        'torchvision',
+        'tensorflow',
+        'tensorboard',
     ],
 )

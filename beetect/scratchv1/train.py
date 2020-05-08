@@ -1,17 +1,18 @@
 import argparse
+import copy
 import os
 import shutil
 import time
-import copy
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as O
-from torch.utils.data import Subset, DataLoader
-from beetect import BeeDataset, Transform
-from beetect.utils import Map
+from beetect import BeeDataset, AugTransform
 from beetect.scratchv1 import resnet18, utils
+from beetect.utils import Map
+from torch.utils.data import Subset, DataLoader
+from torch.utils.tensorboard import SummaryWriter
 
 model_names = ['resnet18']
 
@@ -59,6 +60,9 @@ parser.add_argument('-p', '--print-freq', default=5, type=int,
 parser.add_argument('--anomaly', action='store_true',
                     help='Run train with torch.autograd.detect_anomaly')
 
+
+# Writer will output to ./runs/ directory by default
+writer = SummaryWriter()
 
 def main():
     args = parser.parse_args()
@@ -133,6 +137,8 @@ def main():
         # evaluate on val set
         loss = validate(data_loader.val, model, device, args)
 
+        writer.add_scalar('epoch loss (val)', loss, epoch)
+
         # remember best loss and save checkpoint
         is_best = loss > best_loss
         best_loss = max(loss, best_loss)
@@ -176,7 +182,7 @@ def train(train_loader, model, optimizer, lr_scheduler, epoch, device, args):
             # https://github.com/pytorch/vision/blob/master/references/detection/engine.py#L30
 
             loss_dict = model(images, targets)
-            print(batch_idx, loss_dict)
+            # print(batch_idx, loss_dict)
             loss = compute_total_loss(loss_dict)
 
             # # reduce losses over all GPUs for logging purposes
@@ -244,7 +250,7 @@ def compute_total_loss(loss_dict):
 
 def get_transform(train=False):
     """Returns transform"""
-    return Transform(train)
+    return AugTransform(train)
 
 
 def save_checkpoint(state, is_best, filename='checkpoint.pt'):

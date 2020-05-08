@@ -4,7 +4,7 @@ import matplotlib.patches as patches
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 import torchvision.transforms as T
-from beetect import BeeDataset, Transform
+from beetect import BeeDataset, AugTransform
 from beetect.utils import Map
 import imgaug as ia
 import imgaug.augmenters as iaa
@@ -17,10 +17,10 @@ def main():
     annot_file = '/Users/pjw/pyProjects/dataset/honeybee/video/annot/hive-entrance-1-1min.xml'
     img_dir = '/Users/pjw/pyProjects/dataset/honeybee/video/frame/hive-entrance-1-1min/'
 
-    transform = Transform(train=True)
+    transform = AugTransform(train=True)
     dataset = Map({
         x: BeeDataset(annot_file=annot_file, img_dir=img_dir,
-                      transform=Transform(train=(x is 'train')))
+                      transform=AugTransform(train=(x is 'train')))
         for x in ['train', 'val']
     })
 
@@ -51,6 +51,11 @@ def main():
     # next(iter(data_loader))
     for i, (images, targets) in enumerate(data_loader.train):
         # print(i, target)
+
+        """
+        Since data is normalized, it will show very weird images.
+        For real images, comment Normalize() in transform.py
+        """
 
         fig = plt.figure()
 

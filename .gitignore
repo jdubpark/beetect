@@ -7,3 +7,4 @@ model/
 *.pt
 *.pth
 *.pth.tar
+runs/
