@@ -39,8 +39,8 @@ parser.add_argument('-b', '--batch-size', dest='batch_size',
                     help='mini-batch size (default: 128), this is the total '
                          'batch size of all GPUs on the current node when '
                          'using Data Parallel or Distributed Data Parallel')
-parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
-                    metavar='LR', help='initial learning rate (default: 0.1)',
+parser.add_argument('--lr', '--learning-rate', default=0.01, type=float,
+                    metavar='LR', help='initial learning rate (default: 0.01)',
                     dest='lr')
 parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
                     help='momentum (default: 0.9)')
@@ -134,12 +134,17 @@ def main():
 
     for epoch in range(args.start_epoch, args.epochs):
         # train for one epoch
-        running_batch = train(data_loader.train, model, optimizer, lr_scheduler, epoch, device, running_batch, args)
+        running_batch = train(data_loader.train, model, optimizer, epoch, device, running_batch, args)
 
         # evaluate on val set
         loss = validate(data_loader.val, model, device, args)
 
         writer.add_scalar('epoch loss (val)', loss, epoch)
+
+        # call learning rate scheduler every epoch
+        # StepLR steps by gamma (0.1) every step size (3)
+        # e.g. lr = 1e-4 (epoch < 3) // 1e-5 (3 <= epoch < 6) // 1e-6 (6 <= epoch < 9)
+        lr_scheduler.step()
 
         # remember best loss and save checkpoint
         is_best = loss > best_loss
@@ -157,7 +162,7 @@ def main():
     writer.close()
 
 
-def train(train_loader, model, optimizer, lr_scheduler, epoch, device, running_batch, args):
+def train(train_loader, model, optimizer, epoch, device, running_batch, args):
     """ Similar torchvision function is available
     function: train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq)
     source: https://github.com/pytorch/vision/blob/master/references/detection/engine.py#L13
@@ -204,7 +209,6 @@ def train(train_loader, model, optimizer, lr_scheduler, epoch, device, running_b
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            lr_scheduler.step()
 
         # measure elapsed time
         batch_time.update(time.time() - end)
