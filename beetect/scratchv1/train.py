@@ -221,6 +221,7 @@ def train(train_loader, model, optimizer, epoch, device, running_batch, args):
 
             # training progress validity check
             b = list(model.parameters())[0].clone()
+            # should print True # torch.equal(a.data, b.data) is True means NOT BEING UPDATED
             print('Parameters being updated? {}'.format(torch.equal(a.data, b.data) is not True))
             for param_group in optimizer.param_groups:
                 print('Current learning rate: {}'.format(param_group['lr']))
@@ -262,10 +263,13 @@ def validate(val_loader, model, device, args):
 
 
 def compute_total_loss(loss_dict):
-    """Sum of all losses in dict returned by torchvision Faster RCNN
-    Includes gradient - ready for backward()
     """
-    total_loss = sum(loss for loss in loss_dict.values())
+    Mean of all losses in dict returned by torchvision Faster RCNN
+    Torchvision returns losses with gradient fn included
+    Use mean() over sum()
+    """
+    # total_loss = sum(loss for loss in loss_dict.values())
+    total_loss = mean(loss for loss in loss_dict.values())
     return total_loss
 
 
