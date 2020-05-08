@@ -26,7 +26,7 @@ class AugTransform:
         # normalize default imagenet
         # mean (0.485, 0.456, 0.406)
         # std (0.229, 0.224, 0.225)
-        transforms.append(Normalize())
+        # transforms.append(Normalize())
 
         self.aug = Compose(transforms, bbox_params=BboxParams(format='pascal_voc', label_fields=['labels']))
 

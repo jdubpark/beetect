@@ -152,6 +152,8 @@ def main():
             'loss': best_loss,
         }, is_best)
 
+    writer.close()
+
 
 def train(train_loader, model, optimizer, lr_scheduler, epoch, device, args):
     """ Similar torchvision function is available

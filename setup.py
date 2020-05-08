@@ -19,7 +19,7 @@ setup(
         'albumentations',
         'torch',
         'torchvision',
-        'tensorflow',
-        'tensorboard',
+        'tensorflow>=2.2.0',
+        'tensorboard>=2.2.1',
     ],
 )
