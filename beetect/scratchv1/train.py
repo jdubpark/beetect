@@ -130,10 +130,11 @@ def main():
     #     return
 
     best_loss = 0
+    running_batch = 0 # for tensorboard
 
     for epoch in range(args.start_epoch, args.epochs):
         # train for one epoch
-        train(data_loader.train, model, optimizer, lr_scheduler, epoch, device, args)
+        train(data_loader.train, model, optimizer, lr_scheduler, epoch, device, running_batch, args)
 
         # evaluate on val set
         loss = validate(data_loader.val, model, device, args)
@@ -156,7 +157,7 @@ def main():
     writer.close()
 
 
-def train(train_loader, model, optimizer, lr_scheduler, epoch, device, args):
+def train(train_loader, model, optimizer, lr_scheduler, epoch, device, running_batch, args):
     """ Similar torchvision function is available
     function: train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq)
     source: https://github.com/pytorch/vision/blob/master/references/detection/engine.py#L13
@@ -168,11 +169,6 @@ def train(train_loader, model, optimizer, lr_scheduler, epoch, device, args):
         len(train_loader),
         [batch_time, data_time, losses],
         prefix="Epoch: {}/{}".format(epoch, args.epochs - 1))
-
-    # pick up batch # after prev. epoch (for tensorboard)
-    epoch_start = math.ceil(epoch * len(train_loader) / args.batch_size)
-    if epoch is not 1:
-        epoch_start += 1
 
     # switch to train mode
     model.train()
@@ -213,7 +209,8 @@ def train(train_loader, model, optimizer, lr_scheduler, epoch, device, args):
 
         if batch_idx % args.print_freq == 0:
             progress.display(batch_idx)
-            writer.add_scalar('batch loss (train)', loss, batch_idx+epoch_start)
+            writer.add_scalar('batch loss (train)', loss, batch_idx+running_batch)
+            running_batch += 1
 
 
 def validate(val_loader, model, device, args):
