@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 import torch.optim as O
 from torch.utils.data import Subset, DataLoader
-from beetect import BeeDataset, ImgAugTransform
+from beetect import BeeDataset, Transform
 from beetect.utils import Map
 from beetect.scratchv1 import resnet18, utils
 
@@ -244,7 +244,7 @@ def compute_total_loss(loss_dict):
 
 def get_transform(train=False):
     """Returns transform"""
-    return ImgAugTransform(train)
+    return Transform(train)
 
 
 def save_checkpoint(state, is_best, filename='checkpoint.pt'):
