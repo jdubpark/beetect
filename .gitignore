@@ -3,3 +3,7 @@ dataset
 __pycache__
 venv
 beetect.egg-info
+model/
+*.pt
+*.pth
+*.pth.tar

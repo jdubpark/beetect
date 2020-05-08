@@ -14,6 +14,9 @@ setup(
         'pandas',
         'numpy',
         'matplotlib',
-        'requests'
+        'tensorboardX',
+        'fastai',
+        'Cython',
+        'pycocotools',
     ],
 )

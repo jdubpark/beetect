@@ -4,18 +4,23 @@ import matplotlib.patches as patches
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 import torchvision.transforms as T
-from beetect import BeeDataset, ImgAugTransform
+from beetect import BeeDataset, Transform
 from beetect.utils import Map
+import imgaug as ia
+import imgaug.augmenters as iaa
+from imgaug.augmentables.bbs import BoundingBox, BoundingBoxesOnImage
+
+ia.seed(1)
 
 
 def main():
     annot_file = '/Users/pjw/pyProjects/dataset/honeybee/video/annot/hive-entrance-1-1min.xml'
     img_dir = '/Users/pjw/pyProjects/dataset/honeybee/video/frame/hive-entrance-1-1min/'
 
-    transform = ImgAugTransform(train=True)
+    transform = Transform(train=True)
     dataset = Map({
         x: BeeDataset(annot_file=annot_file, img_dir=img_dir,
-                      transform=ImgAugTransform(train=(x is 'train')))
+                      transform=Transform(train=(x is 'train')))
         for x in ['train', 'val']
     })
 
@@ -44,8 +49,25 @@ def main():
     })
 
     # next(iter(data_loader))
-    for i, (image, target) in enumerate(data_loader.train):
-        print(i, target)
+    for i, (images, targets) in enumerate(data_loader.train):
+        # print(i, target)
+
+        fig = plt.figure()
+
+        # reverse dims e.g. (3, 224, 244) => (224, 244, 3)
+        # since plt accepts channel as the last dim
+        image = images[0].permute(1, 2, 0)
+        target = targets[0]
+
+        bbs = BoundingBoxesOnImage([
+            BoundingBox(x1=x[0], x2=x[2], y1=x[1], y2=x[3]) for x in target['boxes']
+        ], shape=image.shape)
+
+        image_bbs = bbs.draw_on_image(image, size=2, color=[0, 0, 255])
+
+        plt.imshow((image_bbs * 255).astype(np.uint8))
+        plt.show()
+        plt.pause(1)
 
 
 def plot(dataset, num_images=4):
