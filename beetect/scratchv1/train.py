@@ -130,11 +130,11 @@ def main():
     #     return
 
     best_loss = 0
-    running_batch = 0 # for tensorboard
+    running_batch = 0 # running batch count for tensorboard
 
     for epoch in range(args.start_epoch, args.epochs):
         # train for one epoch
-        train(data_loader.train, model, optimizer, lr_scheduler, epoch, device, running_batch, args)
+        running_batch = train(data_loader.train, model, optimizer, lr_scheduler, epoch, device, running_batch, args)
 
         # evaluate on val set
         loss = validate(data_loader.val, model, device, args)
@@ -211,6 +211,8 @@ def train(train_loader, model, optimizer, lr_scheduler, epoch, device, running_b
             progress.display(batch_idx)
             writer.add_scalar('batch loss (train)', loss, running_batch)
             running_batch += 1
+
+    return running_batch
 
 
 def validate(val_loader, model, device, args):
