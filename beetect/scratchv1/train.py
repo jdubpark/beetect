@@ -268,8 +268,8 @@ def compute_total_loss(loss_dict):
     Torchvision returns losses with gradient fn included
     Use mean() over sum()
     """
-    # total_loss = sum(loss for loss in loss_dict.values())
-    total_loss = mean(loss for loss in loss_dict.values())
+    total_loss = sum(loss for loss in loss_dict.values())
+    total_loss /= len(loss_dict)
     return total_loss
 
 
