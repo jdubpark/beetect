@@ -210,7 +210,7 @@ def train(train_loader, model, optimizer, lr_scheduler, epoch, device, running_b
             print('Parameters being updated? {}'.format(torch.equal(a.data, b.data) is not True))
 
             for param_group in optimizer.param_groups:
-                print('Parameters being updated? {}'.format(param_group['lr']))
+                print('Current learning rate: {}'.format(param_group['lr']))
 
         # measure elapsed time
         batch_time.update(time.time() - end)
