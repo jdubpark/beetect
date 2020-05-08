@@ -209,7 +209,7 @@ def train(train_loader, model, optimizer, lr_scheduler, epoch, device, running_b
 
         if batch_idx % args.print_freq == 0:
             progress.display(batch_idx)
-            writer.add_scalar('batch loss (train)', loss, batch_idx+running_batch)
+            writer.add_scalar('batch loss (train)', loss, running_batch)
             running_batch += 1
 
 
