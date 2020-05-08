@@ -1,5 +1,6 @@
 import argparse
 import copy
+import math
 import os
 import shutil
 import time
@@ -168,6 +169,11 @@ def train(train_loader, model, optimizer, lr_scheduler, epoch, device, args):
         [batch_time, data_time, losses],
         prefix="Epoch: {}/{}".format(epoch, args.epochs - 1))
 
+    # pick up batch # after prev. epoch (for tensorboard)
+    epoch_start = math.ceil(epoch * len(train_loader) / args.batch_size)
+    if epoch is not 1:
+        epoch_start += 1
+
     # switch to train mode
     model.train()
 
@@ -207,7 +213,7 @@ def train(train_loader, model, optimizer, lr_scheduler, epoch, device, args):
 
         if batch_idx % args.print_freq == 0:
             progress.display(batch_idx)
-            writer.add_scalar('batch loss (train)', loss, batch_idx+epoch*args.batch_size)
+            writer.add_scalar('batch loss (train)', loss, batch_idx+epoch_start)
 
 
 def validate(val_loader, model, device, args):
