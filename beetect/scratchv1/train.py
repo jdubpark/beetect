@@ -148,7 +148,7 @@ def main():
 
         # remember best loss and save checkpoint
         is_best = loss > best_loss
-        best_loss = max(loss, best_loss)
+        best_loss = min(loss, best_loss)
 
         # save checkpoint
         save_checkpoint({
