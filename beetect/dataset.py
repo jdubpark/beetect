@@ -82,9 +82,9 @@ class BeeDatasetVid(Dataset):
         labels = torch.ones((num_boxes,), dtype=torch.int64)
 
         target = Map({})
-        target.boxes = boxes
+        target.boxes = torch.tensor(boxes, dtype=torch.float32)
         target.labels = labels
-        target.image_id = torch.tensor([int(frame)])
+        target.image_id = torch.tensor([int(frame)], dtype=torch.int64)
 
         if self.transform:
             image, target = self.transform(image, target)
