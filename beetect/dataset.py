@@ -29,6 +29,7 @@ class BeeDatasetVid(Dataset):
 
         self.annot_lists = {}
         self.img_dirs = {}
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         for folder_name in folder_list:
             # folder name is annot file name
@@ -38,6 +39,10 @@ class BeeDatasetVid(Dataset):
             self.img_dirs[rand_prefix] = os.path.join(img_dir, folder_name)
 
         self.frame_lists = [f for f in self.annot_lists.keys()]
+
+        for name in self.frame_lists:
+            if name not in self.annot_lists:
+                print(name)
 
         # print(self.img_dirs)
 
@@ -82,9 +87,10 @@ class BeeDatasetVid(Dataset):
         labels = torch.ones((num_boxes,), dtype=torch.int64)
 
         target = Map({})
-        target.boxes = torch.tensor(boxes, dtype=torch.float32)
+        target.boxes = torch.tensor(boxes, dtype=torch.float32).to(self.device)
         target.labels = labels
         target.image_id = torch.tensor([int(frame)], dtype=torch.int64)
+        print(torch.all(torch.tensor(boxes).eq(target.boxes)))
 
         if self.transform:
             image, target = self.transform(image, target)
