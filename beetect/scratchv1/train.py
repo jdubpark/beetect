@@ -12,18 +12,18 @@ import torch.optim as O
 from torch.utils.data import Subset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from beetect import BeeDatasetVid, AugTransform
-from beetect.scratchv1 import resnet50, utils
+from beetect.scratchv1 import resnet50_fpn, utils
 from beetect.utils import Map
 
-model_names = ['resnet50']
+model_names = ['resnet50_fpn']
 
 # reference: https://github.com/pytorch/examples/blob/master/imagenet/main.py
 parser = argparse.ArgumentParser(description='PyTorch ScratchV1 Training')
-parser.add_argument('-a', '--arch', default='resnet50', metavar='ARCH',
+parser.add_argument('-a', '--arch', default='resnet50_fpn', metavar='ARCH',
                     choices=model_names,
                     help='model architecture: '+
                         ' | '.join(model_names) +
-                        ' (default: resnet50)')
+                        ' (default: resnet50_fpn)')
 parser.add_argument('--annot', '--annots', type=str, metavar='S',
                     dest='annots', help='annotation file')
 parser.add_argument('--image', '--images', type=str, metavar='S',
@@ -70,7 +70,7 @@ writer = SummaryWriter()
 def main():
     args = parser.parse_args()
 
-    model = resnet50()
+    model = resnet50_fpn()
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model.to(device)
@@ -105,8 +105,8 @@ def main():
                       momentum=args.momentum, weight_decay=args.weight_decay)
 
     # learning rate scheduler
-    lr_scheduler = O.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
-    # lr_scheduler = O.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5)
+    # lr_scheduler = O.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
+    lr_scheduler = O.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5)
 
     # printing info for optimizer
     # print('Params to learn:')
