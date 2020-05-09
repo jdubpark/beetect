@@ -17,7 +17,8 @@ class AugTransform:
     """Flexible transforming"""
 
     def __init__(self, train, size=(224, 224)):
-        transforms = [Resize(*size)]
+        # transforms = [Resize(*size)]
+        transforms = []
 
         if train:
             # default p=0.5
@@ -28,15 +29,20 @@ class AugTransform:
         # std (0.229, 0.224, 0.225)
         # transforms.append(Normalize())
 
-        self.aug = Compose(transforms, bbox_params=BboxParams(format='pascal_voc', label_fields=['labels']))
+        self.aug = Compose(transforms)
+        self.aug_train = Compose(transforms, bbox_params=BboxParams(format='pascal_voc', label_fields=['labels']))
 
-    def __call__(self, image, target):
-        aug_arg = {
-            'image': np.array(image), # pil to numpy
-            'bboxes': target.boxes,
-            'labels': target.labels.numpy(),
-        }
-        augmented = self.aug(**aug_arg)
+    def __call__(self, image, target=None):
+        aug_arg = {'image': np.array(image)} # original is pil
+
+        if target is None:
+            augmented = self.aug(**aug_arg)
+            image = T.ToTensor()(augmented['image'])
+            return image
+
+        aug_arg['bboxes'] = target.boxes
+        aug_arg['labels'] = target.labels.numpy()
+        augmented = self.aug_train(**aug_arg)
 
         # target.boxes =
         image = T.ToTensor()(augmented['image'])

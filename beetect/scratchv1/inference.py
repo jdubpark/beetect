@@ -4,16 +4,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import torchvision.transforms as T
-from beetect.scratchv1 import resnet18
 import imgaug as ia
 import imgaug.augmenters as iaa
 from imgaug.augmentables.bbs import BoundingBox, BoundingBoxesOnImage
+from beetect import AugTransform
+from beetect.scratchv1 import resnet18, resnet18_fpn
 
 ia.seed(1)
 
 
 def main():
-    model = resnet18()
+    # model = resnet18()
+    model = resnet18_fpn()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     if torch.cuda.is_available():
@@ -33,20 +35,31 @@ def main():
 
     # image = Image.open('732.png')
     image = Image.open('bee1.jpg')
-    input = T.ToTensor()(image).unsqueeze(0).to(device)
+    # image = Image.open('FudanPed00009.png')
+
+    aug = AugTransform(train=False)
+    image = aug(image)
+
+    input = image.unsqueeze(0).to(device)
     image_np = np.asarray(image)
 
+    # print(image.shape)
+    # print(input.size())
     with torch.no_grad():
         output = model(input)
 
-    print(arch, epoch, loss)
+    # print(arch, epoch, loss)
     print(output)
 
+    # plot(image_np, output)
+
+
+def plot(image, output, color=[0, 0, 255]):
     bbs = BoundingBoxesOnImage([
         BoundingBox(x1=x[0], x2=x[2], y1=x[1], y2=x[3]) for x in output[0]['boxes']
-    ], shape=image_np.shape)
+    ], shape=image.shape)
 
-    image_bbs = bbs.draw_on_image(image_np, size=2, color=[0, 0, 255])
+    image_bbs = bbs.draw_on_image(image, size=2, color=color)
     fig = plt.figure()
     plt.imshow(image_bbs)
     plt.show()

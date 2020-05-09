@@ -8,10 +8,10 @@ from torch.hub import load_state_dict_from_url
 from torchvision.ops import misc as misc_nn_ops
 from torchvision.ops import MultiScaleRoIAlign
 
-from torchvision.models.detection.generalized_rcnn import GeneralizedRCNN
 from torchvision.models.detection.rpn import AnchorGenerator, RPNHead, RegionProposalNetwork
 from torchvision.models.detection.roi_heads import RoIHeads
 from beetect.scratchv1.transform import GeneralizedRCNNTransform
+from beetect.scratchv1.generalized_rcnn import GeneralizedRCNN
 
 
 __all__ = [
@@ -190,7 +190,7 @@ class FasterRCNN(GeneralizedRCNN):
         # this bad boi leads to that: https://github.com/pytorch/vision/blob/master/torchvision/models/detection/transform.py#L58
         # which gets passed here: https://github.com/pytorch/vision/blob/master/torchvision/models/detection/faster_rcnn.py#L233
         # and finally used here: https://github.com/pytorch/vision/blob/master/torchvision/models/detection/generalized_rcnn.py#L66
-        transform = GeneralizedRCNNTransform()
+        transform = GeneralizedRCNNTransform(min_size, max_size, image_mean, image_std)
 
         super(FasterRCNN, self).__init__(backbone, rpn, roi_heads, transform)
 

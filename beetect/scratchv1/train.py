@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 import torch.optim as O
 from beetect import BeeDataset, AugTransform
-from beetect.scratchv1 import resnet18, utils
+from beetect.scratchv1 import resnet18, resnet18_fpn, utils
 from beetect.utils import Map
 from torch.utils.data import Subset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -68,7 +68,8 @@ writer = SummaryWriter()
 def main():
     args = parser.parse_args()
 
-    model = resnet18()
+    # model = resnet18()
+    model = resnet18_fpn()
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model.to(device)
@@ -153,7 +154,7 @@ def main():
         # save checkpoint
         save_checkpoint({
             'arch': args.arch,
-            'epoch': epoch + 1,
+            'epoch': epoch,
             'state_dict': model.state_dict(),
             'optimizer': optimizer.state_dict(),
             'loss': best_loss,

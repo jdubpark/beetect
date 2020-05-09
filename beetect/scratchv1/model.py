@@ -12,7 +12,7 @@ def resnet18(pretrained=True, num_classes=2, **kwargs):
     # Detach head (single fc layer for ResNet), thus leaving only the backbone.
     # Will be replaced with FasterRCNN head (multiple-heads).
     # For concept of single vs. multiple-heads, see https://stackoverflow.com/a/56004582/13086908
-    backbone = list(model.children())[:-1]
+    backbone = list(model.children())[:-4]
     backbone = nn.Sequential(*backbone)
 
     # define out channels (for FasterRCNN)
@@ -20,7 +20,7 @@ def resnet18(pretrained=True, num_classes=2, **kwargs):
 
     # attach new head - FasterRCNN
     model = FasterRCNN(backbone, num_classes=num_classes,
-                       min_size=720)
+                       min_size=224)
     return model
 
 
@@ -31,7 +31,7 @@ def resnet18_fpn(pretrained=True, num_classes=2, **kwargs):
     # out channels is already defined as 256
     # attach FasterRCNN head
     model = FasterRCNN(backbone, num_classes=num_classes,
-                       min_size=720)
+                       min_size=224)
 
     return model
 
