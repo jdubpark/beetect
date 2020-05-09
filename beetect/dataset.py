@@ -145,8 +145,8 @@ class BeeDatasetCropped():
         if w > 0 and h > 0:
             boxes = torch.tensor([0, 0, w, h])
         else:
-            boxes = torch.tensor([])
-        boxes = boxes.unsqueeze(0) # add fake dim for processing
+            boxes = torch.tensor([0, 0, 0, 0])
+        boxes = boxes.unsqueeze(0) # add fake dim for unbinding later
 
         target = Map({})
         target.boxes = boxes
