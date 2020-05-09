@@ -17,7 +17,7 @@ ia.seed(1)
 
 parser = argparse.ArgumentParser(description='Beetect Test Dataset')
 parser.add_argument('--annot', '--annots', type=str, metavar='S',
-                    dest='annots', help='annotation file')
+                    dest='annots', help='annotation directory')
 parser.add_argument('--image', '--images', type=str, metavar='S',
                     dest='images', help='images directory')
 
@@ -27,8 +27,8 @@ def main():
 
     transform = AugTransform(train=True)
     dataset = Map({
-        x: BeeDatasetVid(annot_file=args.annots, img_dir=args.images,
-                      transform=AugTransform(train=(x is 'train')))
+        x: BeeDatasetVid(annot_dir=args.annots, img_dir=args.images,
+                         transform=AugTransform(train=(x is 'train')))
         for x in ['train', 'val']
     })
 

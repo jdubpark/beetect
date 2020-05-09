@@ -1,5 +1,7 @@
 import glob
 import os
+import random
+import string
 import xml.etree.ElementTree as ET
 from PIL import Image
 
@@ -13,20 +15,37 @@ __all__ = ['BeeDatasetVid']
 
 
 class BeeDatasetVid(Dataset):
-    """Bee dataset pulled from a yt video"""
+    """Bee dataset pulled from yt videos"""
 
-    def __init__(self, annot_file, img_dir, transform=None):
+    def __init__(self, annot_dir, img_dir, transform=None, ext='jpg'):
         """
         Args:
-            annot_file (string): Path to the annotation file
-            img_dir (string): Root folder of images
+            annot_dir (string): Root dir of annotation file
+            img_dir (string): Root dir of folder of images
         """
-        self.frame_list, self.frame_annots = self.read_annot_file(annot_file)
-        self.img_dir = img_dir
+
+        # skip folders/files starting with .
+        folder_list = [f for f in os.listdir(img_dir) if not f.startswith('.')]
+
+        self.annot_lists = {}
+        self.img_dirs = {}
+
+        for folder_name in folder_list:
+            # folder name is annot file name
+            annot_file = os.path.join(annot_dir, folder_name + '.xml')
+            annots, rand_prefix = self.read_annot_file(annot_file)
+            self.annot_lists.update(annots)
+            self.img_dirs[rand_prefix] = os.path.join(img_dir, folder_name)
+
+        self.frame_lists = [f for f in self.annot_lists.keys()]
+
+        # print(self.img_dirs)
+
         self.transform = transform
+        self.ext = '.' + ext
 
     def __len__(self):
-        return len(self.frame_list)
+        return len(self.frame_lists)
 
     def __getitem__(self, idx):
         """
@@ -49,11 +68,13 @@ class BeeDatasetVid(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        frame = str(self.frame_list[idx]) # frame name (e.g. 47 -> 47th frame)
-        frame_path = os.path.join(self.img_dir, frame + '.png')
+        pframe = self.frame_lists[idx]
+        pre, frame = pframe.split('_')
+        img_dir = self.img_dirs[pre]
+        frame_path = os.path.join(img_dir, frame + self.ext)
 
         image = Image.open(frame_path).convert('RGB')
-        boxes = self.frame_annots[frame] # frame boxes
+        boxes = self.annot_lists[pframe]
         num_boxes = len(boxes)
 
         # boxes = torch.as_tensor(boxes)
@@ -81,7 +102,11 @@ class BeeDatasetVid(Dataset):
         """
         tree = ET.parse(annot_file)
         root = tree.getroot()
-        frames = {}
+        annot_frames = {} # annotated frames
+
+        # generate unique prefix for identification
+        prefix_len = 4
+        rand_prefix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=prefix_len))
 
         # a track contains all annotated frames for an object
         tracks = [c for c in root if c.tag == 'track']
@@ -97,16 +122,15 @@ class BeeDatasetVid(Dataset):
                 if attr['outside'] != '0': continue
 
                 frame = attr['frame'] # annotated frame id
+                pframe = '{}_{}'.format(rand_prefix, frame) # _ separater
                 # bbox position top left, bottom right
                 bbox = [attr['xtl'], attr['ytl'], attr['xbr'], attr['ybr']]
                 bbox = [float(n) for n in bbox] # string to float
 
                 # set up frame obj in frames
-                if frame not in frames:
-                    frames[frame] = []
+                if pframe not in annot_frames:
+                    annot_frames[pframe] = []
 
-                frames[frame].append(bbox)
+                annot_frames[pframe].append(bbox)
 
-        frame_list = sorted([int(n) for n in frames.keys()]) # list of annotated frames
-
-        return frame_list, frames
+        return annot_frames, rand_prefix
