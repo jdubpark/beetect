@@ -25,12 +25,12 @@ def resnet18(pretrained=True, num_classes=2, **kwargs):
     return model
 
 
-def resnet18_fpn(pretrained=True, num_classes=2, **kwargs):
+def resnet50_fpn(pretrained=True, num_classes=2, **kwargs):
     """Pretrained FPN-ResNet-18 with FasterRCNN"""
 
     norm_layer = misc_nn_ops.FrozenBatchNorm2d
 
-    backbone = resnet.resnet18(pretrained=pretrained, norm_layer=norm_layer)
+    backbone = resnet.resnet50(pretrained=pretrained, norm_layer=norm_layer)
 
     # freeze layers
     # for name, parameter in backbone.named_parameters():

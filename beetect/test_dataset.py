@@ -1,25 +1,33 @@
-import numpy as np
+import argparse
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from torch.utils.data import DataLoader
-from torch.utils.data.sampler import SubsetRandomSampler
-import torchvision.transforms as T
-from beetect import BeeDataset, AugTransform
-from beetect.utils import Map
+
 import imgaug as ia
 import imgaug.augmenters as iaa
+import numpy as np
+import torchvision.transforms as T
 from imgaug.augmentables.bbs import BoundingBox, BoundingBoxesOnImage
+from torch.utils.data import DataLoader
+from torch.utils.data.sampler import SubsetRandomSampler
+from beetect import BeeDatasetVid, BeeDatasetCropped, AugTransform
+from beetect.utils import Map
 
 ia.seed(1)
 
 
+parser = argparse.ArgumentParser(description='Beetect Test Dataset')
+parser.add_argument('--annot', '--annots', type=str, metavar='S',
+                    dest='annots', help='annotation file')
+parser.add_argument('--image', '--images', type=str, metavar='S',
+                    dest='images', help='images directory')
+
+
 def main():
-    annot_file = '/Users/pjw/pyProjects/dataset/honeybee/video/annot/hive-entrance-1-1min.xml'
-    img_dir = '/Users/pjw/pyProjects/dataset/honeybee/video/frame/hive-entrance-1-1min/'
+    args = parser.parse_args()
 
     transform = AugTransform(train=True)
     dataset = Map({
-        x: BeeDataset(annot_file=annot_file, img_dir=img_dir,
+        x: BeeDatasetCropped(annot_file=args.annots, img_dir=args.images,
                       transform=AugTransform(train=(x is 'train')))
         for x in ['train', 'val']
     })

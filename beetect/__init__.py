@@ -1,3 +1,3 @@
-from .dataset import BeeDataset
+from .dataset import *
 from .transform import *
 # from .model import *

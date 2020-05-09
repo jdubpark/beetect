@@ -11,21 +11,23 @@ import torch.nn as nn
 import torch.optim as O
 from torch.utils.data import Subset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from beetect import BeeDataset, AugTransform
-from beetect.scratchv1 import resnet18, resnet18_fpn, utils
+from beetect import BeeDatasetVid, BeeDatasetCropped, AugTransform
+from beetect.scratchv1 import resnet50_fpn, utils
 from beetect.utils import Map
 
-model_names = ['resnet18']
+model_names = ['resnet50_fpn']
 
 # reference: https://github.com/pytorch/examples/blob/master/imagenet/main.py
 parser = argparse.ArgumentParser(description='PyTorch ScratchV1 Training')
-parser.add_argument('-a', '--arch', default='resnet18', metavar='ARCH',
+parser.add_argument('-a', '--arch', default='resnet50_fpn', metavar='ARCH',
                     choices=model_names,
                     help='model architecture: '+
                         ' | '.join(model_names) +
-                        ' (default: resnet18)')
-parser.add_argument('--data', default='/Users/pjw/pyProjects/dataset/honeybee/video',
-                    type=str, metavar='S', help='data directory')
+                        ' (default: resnet50_fpn)')
+parser.add_argument('--annot', '--annots', type=str, metavar='S',
+                    dest='annots', help='annotation file')
+parser.add_argument('--image', '--images', type=str, metavar='S',
+                    dest='images', help='images directory')
 parser.add_argument('-j', '--workers', default=0, type=int, metavar='N',
                     help='number of data loading workers (default: 0)')
 parser.add_argument('--epochs', default=30, type=int, metavar='N',
@@ -69,17 +71,18 @@ def main():
     args = parser.parse_args()
 
     # model = resnet18()
-    model = resnet18_fpn()
+    # model = resnet18_fpn()
+    model = resnet50_fpn()
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model.to(device)
 
     # prepare dataset
-    annot_file = args.data+'/annot/hive-entrance-1-1min.xml'
-    img_dir = args.data+'/frame/hive-entrance-1-1min/'
+    annot_file = args.annots
+    img_dir = args.images
 
     dataset = Map({
-        x: BeeDataset(annot_file=annot_file, img_dir=img_dir,
+        x: BeeDatasetCropped(annot_file=annot_file, img_dir=img_dir,
                       transform=get_transform(train=(x is 'train')))
         for x in ['train', 'val']
     })

@@ -8,14 +8,14 @@ import imgaug as ia
 import imgaug.augmenters as iaa
 from imgaug.augmentables.bbs import BoundingBox, BoundingBoxesOnImage
 from beetect import AugTransform
-from beetect.scratchv1 import resnet18, resnet18_fpn
+from beetect.scratchv1 import resnet18, resnet50_fpn
 
 ia.seed(1)
 
 
 def main():
     # model = resnet18()
-    model = resnet18_fpn()
+    model = resnet50_fpn()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     if torch.cuda.is_available():
@@ -23,7 +23,10 @@ def main():
     else:
         map_location='cpu'
 
-    checkpoint = torch.load('./model_best.pt', map_location=map_location)
+    checkpoint_path = './resnet18_fpn_model.pt'
+    # checkpoint_path = './resnet18_model.pt'
+
+    checkpoint = torch.load(checkpoint_path, map_location=map_location)
     model.load_state_dict(checkpoint['state_dict'])
     arch = checkpoint['arch']
     epoch = checkpoint['epoch']
@@ -33,25 +36,50 @@ def main():
 
     model.eval()
 
-    # image = Image.open('732.png')
-    image = Image.open('bee1.jpg')
+    image = Image.open('732.png')
+    # image = Image.open('bee1.jpg')
     # image = Image.open('FudanPed00009.png')
+    image = T.ToTensor()(image)
 
-    aug = AugTransform(train=False)
-    image = aug(image)
+    # aug = AugTransform(train=False)
+    # image = aug(image)
 
     input = image.unsqueeze(0).to(device)
-    image_np = np.asarray(image)
 
     # print(image.shape)
     # print(input.size())
     with torch.no_grad():
         output = model(input)
 
-    # print(arch, epoch, loss)
-    print(output)
+    print(arch, epoch, loss)
+    # print(output)
 
-    # plot(image_np, output)
+    output = get_min_score(output)
+    print(output)
+    image = image.permute(1, 2, 0).numpy()
+    plot(image, output)
+
+
+def get_min_score(output, threshold=0.3):
+    target = output[0]
+    boxes = []
+    labels = []
+    scores = []
+
+    for i in range(len(target['scores'].numpy())):
+        score = target['scores'][i]
+        if score >= threshold:
+            boxes.append(target['boxes'][i])
+            labels.append(target['labels'][i])
+            scores.append(target['scores'][i])
+
+    output[0] = {
+        'boxes': torch.stack(boxes, 0),
+        'labels': torch.stack(labels, 0),
+        'scores': scores,
+    }
+
+    return output
 
 
 def plot(image, output, color=[0, 0, 255]):
@@ -61,7 +89,7 @@ def plot(image, output, color=[0, 0, 255]):
 
     image_bbs = bbs.draw_on_image(image, size=2, color=color)
     fig = plt.figure()
-    plt.imshow(image_bbs)
+    plt.imshow(np.clip(image_bbs, 0, 1))
     plt.show()
 
 
