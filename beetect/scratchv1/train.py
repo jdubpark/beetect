@@ -215,9 +215,6 @@ def train(train_loader, model, optimizer, epoch, device, running_batch, args):
         batch_time.update(time.time() - end)
         end = time.time()
 
-        # print(a)
-        print(list(model.parameters()))
-
         if batch_idx % args.print_freq == 0:
             progress.display(batch_idx)
             writer.add_scalar('batch loss (train)', loss, running_batch)
