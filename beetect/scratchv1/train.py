@@ -25,7 +25,7 @@ parser.add_argument('-a', '--arch', default='resnet50_fpn', metavar='ARCH',
                         ' | '.join(model_names) +
                         ' (default: resnet50_fpn)')
 parser.add_argument('--annot', '--annots', type=str, metavar='S',
-                    dest='annots', help='annotation file')
+                    dest='annots', help='annotation directory')
 parser.add_argument('--image', '--images', type=str, metavar='S',
                     dest='images', help='images directory')
 parser.add_argument('-j', '--workers', default=0, type=int, metavar='N',
@@ -76,11 +76,11 @@ def main():
     model.to(device)
 
     # prepare dataset
-    annot_file = args.annots
+    annot_dir = args.annots
     img_dir = args.images
 
     dataset = Map({
-        x: BeeDatasetVid(annot_file=annot_file, img_dir=img_dir,
+        x: BeeDatasetVid(annot_dir=annot_dir, img_dir=img_dir,
                       transform=get_transform(train=(x is 'train')))
         for x in ['train', 'val']
     })
