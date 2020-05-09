@@ -148,7 +148,7 @@ def main():
         lr_scheduler.step()
 
         # remember best loss and save checkpoint
-        is_best = loss > best_loss
+        is_best = loss < best_loss
         best_loss = min(loss, best_loss)
 
         # save checkpoint
