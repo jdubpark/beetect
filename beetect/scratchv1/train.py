@@ -9,11 +9,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as O
+from torch.utils.data import Subset, DataLoader
+from torch.utils.tensorboard import SummaryWriter
 from beetect import BeeDataset, AugTransform
 from beetect.scratchv1 import resnet18, resnet18_fpn, utils
 from beetect.utils import Map
-from torch.utils.data import Subset, DataLoader
-from torch.utils.tensorboard import SummaryWriter
 
 model_names = ['resnet18']
 
@@ -214,6 +214,9 @@ def train(train_loader, model, optimizer, epoch, device, running_batch, args):
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
+
+        # print(a)
+        print(list(model.parameters()))
 
         if batch_idx % args.print_freq == 0:
             progress.display(batch_idx)
