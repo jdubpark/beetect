@@ -147,7 +147,7 @@ def main():
         # call learning rate scheduler every epoch
         # StepLR steps by gamma (0.1) every step size (3)
         # e.g. lr = 1e-4 (epoch < 3) // 1e-5 (3 <= epoch < 6) // 1e-6 (6 <= epoch < 9)
-        lr_scheduler.step()
+        lr_scheduler.step(loss)
 
         # remember best loss and save checkpoint
         is_best = loss < best_loss
