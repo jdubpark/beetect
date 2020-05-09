@@ -11,19 +11,19 @@ import torch.nn as nn
 import torch.optim as O
 from torch.utils.data import Subset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from beetect import BeeDatasetVid, BeeDatasetCropped, AugTransform
-from beetect.scratchv1 import resnet50_fpn, utils
+from beetect import BeeDatasetVid, AugTransform
+from beetect.scratchv1 import resnet50, utils
 from beetect.utils import Map
 
-model_names = ['resnet50_fpn']
+model_names = ['resnet50']
 
 # reference: https://github.com/pytorch/examples/blob/master/imagenet/main.py
 parser = argparse.ArgumentParser(description='PyTorch ScratchV1 Training')
-parser.add_argument('-a', '--arch', default='resnet50_fpn', metavar='ARCH',
+parser.add_argument('-a', '--arch', default='resnet50', metavar='ARCH',
                     choices=model_names,
                     help='model architecture: '+
                         ' | '.join(model_names) +
-                        ' (default: resnet50_fpn)')
+                        ' (default: resnet50)')
 parser.add_argument('--annot', '--annots', type=str, metavar='S',
                     dest='annots', help='annotation file')
 parser.add_argument('--image', '--images', type=str, metavar='S',
@@ -70,9 +70,7 @@ writer = SummaryWriter()
 def main():
     args = parser.parse_args()
 
-    # model = resnet18()
-    # model = resnet18_fpn()
-    model = resnet50_fpn()
+    model = resnet50()
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model.to(device)
@@ -82,7 +80,7 @@ def main():
     img_dir = args.images
 
     dataset = Map({
-        x: BeeDatasetCropped(annot_file=annot_file, img_dir=img_dir,
+        x: BeeDatasetVid(annot_file=annot_file, img_dir=img_dir,
                       transform=get_transform(train=(x is 'train')))
         for x in ['train', 'val']
     })
@@ -108,6 +106,7 @@ def main():
 
     # learning rate scheduler
     lr_scheduler = O.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
+    # lr_scheduler = O.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5)
 
     # printing info for optimizer
     # print('Params to learn:')
@@ -161,7 +160,7 @@ def main():
             'state_dict': model.state_dict(),
             'optimizer': optimizer.state_dict(),
             'loss': best_loss,
-        }, is_best)
+        }, is_best, args)
 
     writer.close()
 
@@ -282,10 +281,10 @@ def get_transform(train=False):
     return AugTransform(train)
 
 
-def save_checkpoint(state, is_best, filename='checkpoint.pt'):
-    torch.save(state, filename)
+def save_checkpoint(state, is_best, args, filename='checkpoint.pt'):
+    torch.save(state, '{}_{}'.format(args.arch, filename))
     if is_best:
-        shutil.copyfile(filename, 'model_best.pt')
+        shutil.copyfile(filename, '{}_best.pt'.format(args.arch))
 
 
 class AverageMeter(object):

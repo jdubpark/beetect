@@ -7,12 +7,30 @@ from beetect.scratchv1.faster_rcnn import FasterRCNN
 
 def resnet18(pretrained=True, num_classes=2, **kwargs):
     """Pretrained ResNet-18 with FasterRCNN"""
-    model = resnet.resnet18(pretrained=pretrained)
+    model = resnet.resnet50(pretrained=pretrained)
     # get fc in features
     in_features = model.fc.in_features
-    # Detach head (single fc layer for ResNet), thus leaving only the backbone.
+    # Detach AvgPooling and head (single fc layer for ResNet), thus leaving only the backbone.
     # Will be replaced with FasterRCNN head (multiple-heads).
     # For concept of single vs. multiple-heads, see https://stackoverflow.com/a/56004582/13086908
+    backbone = list(model.children())[:-2]
+    backbone = nn.Sequential(*backbone)
+
+    # define out channels (for FasterRCNN)
+    backbone.out_channels = in_features
+
+    # attach new head - FasterRCNN
+    model = FasterRCNN(backbone, num_classes=num_classes,
+                       min_size=224)
+    return model
+
+
+def resnet50(pretrained=True, num_classes=2, **kwargs):
+    """Pretrained ResNet-50 with FasterRCNN"""
+    model = resnet.resnet50(pretrained=pretrained)
+    in_features = model.fc.in_features # 2048 for resnet-50
+
+    # detach avgpool and fc at the end
     backbone = list(model.children())[:-4]
     backbone = nn.Sequential(*backbone)
 

@@ -9,7 +9,7 @@ import torchvision.transforms as T
 from imgaug.augmentables.bbs import BoundingBox, BoundingBoxesOnImage
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
-from beetect import BeeDatasetVid, BeeDatasetCropped, AugTransform
+from beetect import BeeDatasetVid, AugTransform
 from beetect.utils import Map
 
 ia.seed(1)
@@ -27,7 +27,7 @@ def main():
 
     transform = AugTransform(train=True)
     dataset = Map({
-        x: BeeDatasetCropped(annot_file=args.annots, img_dir=args.images,
+        x: BeeDatasetVid(annot_file=args.annots, img_dir=args.images,
                       transform=AugTransform(train=(x is 'train')))
         for x in ['train', 'val']
     })

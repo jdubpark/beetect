@@ -59,16 +59,16 @@ class GeneralizedRCNNTransform(nn.Module):
         images = [img for img in images]
         for i in range(len(images)):
             image = images[i]
-            target_index = targets[i] if targets is not None else None
-
+            target = targets[i] if targets is not None else None
             if image.dim() != 3:
                 raise ValueError("images is expected to be a list of 3d tensors "
                                  "of shape [C, H, W], got {}".format(image.shape))
+
             image = self.normalize(image)
-            image, target_index = self.resize(image, target_index)
+            image, target = self.resize(image, target)
             images[i] = image
-            if targets is not None and target_index is not None:
-                targets[i] = target_index
+            if targets is not None and target is not None:
+                targets[i] = target
 
         # test_plot_all(orig_imgs[0], images[0], targets[0], self.denormalize)
         # test_plot(image, bbox)

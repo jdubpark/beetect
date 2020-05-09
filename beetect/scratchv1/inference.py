@@ -8,14 +8,13 @@ import imgaug as ia
 import imgaug.augmenters as iaa
 from imgaug.augmentables.bbs import BoundingBox, BoundingBoxesOnImage
 from beetect import AugTransform
-from beetect.scratchv1 import resnet18, resnet50_fpn
+from beetect.scratchv1 import resnet50
 
 ia.seed(1)
 
 
 def main():
-    # model = resnet18()
-    model = resnet50_fpn()
+    model = resnet50()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     if torch.cuda.is_available():
@@ -23,7 +22,7 @@ def main():
     else:
         map_location='cpu'
 
-    checkpoint_path = './resnet18_fpn_model.pt'
+    checkpoint_path = './resnet50.pt'
     # checkpoint_path = './resnet18_model.pt'
 
     checkpoint = torch.load(checkpoint_path, map_location=map_location)
@@ -36,8 +35,8 @@ def main():
 
     model.eval()
 
-    image = Image.open('732.png')
-    # image = Image.open('bee1.jpg')
+    # image = Image.open('732.png')
+    image = Image.open('bee1.jpg')
     # image = Image.open('FudanPed00009.png')
     image = T.ToTensor()(image)
 

@@ -9,7 +9,7 @@ from imgaug.augmentables.bbs import BoundingBox, BoundingBoxesOnImage
 from beetect.utils import Map
 
 
-__all__ = ['BeeDatasetVid', 'BeeDatasetCropped']
+__all__ = ['BeeDatasetVid']
 
 
 class BeeDatasetVid(Dataset):
@@ -110,50 +110,3 @@ class BeeDatasetVid(Dataset):
         frame_list = sorted([int(n) for n in frames.keys()]) # list of annotated frames
 
         return frame_list, frames
-
-
-class BeeDatasetCropped():
-    """Bee dataset of already bounding box cropped images"""
-
-    def __init__(self, annot_file, img_dir, transform=None, ext='png'):
-        """
-        Args:
-            img_dir (string): Root folder of images
-        """
-        self.img_dir = img_dir
-        self.transform = transform
-        self.image_list = [os.path.basename(x) for x in
-                           glob.glob(os.path.join(img_dir, '*.'+ext))]
-
-        if len(self.image_list) is False:
-            ValueError('Image folder is empty')
-
-    def __len__(self):
-        return len(self.image_list)
-
-    def __getitem__(self, idx):
-        if torch.is_tensor(idx):
-            idx = idx.tolist()
-
-        image_name = self.image_list[idx]
-        image_path = os.path.join(self.img_dir, image_name)
-
-        image = Image.open(image_path).convert('RGB')
-
-        # boxes are the boundaries in cropped images
-        w, h = image.size
-        if w > 0 and h > 0:
-            boxes = torch.tensor([0, 0, w, h])
-        else:
-            boxes = torch.tensor([0, 0, 0, 0])
-        boxes = boxes.unsqueeze(0) # add fake dim for unbinding later
-
-        target = Map({})
-        target.boxes = boxes
-        target.labels = torch.tensor([1])
-        target.image_id = torch.tensor([idx])
-
-        if self.transform:
-            image, target = self.transform(image, target)
-
-        return image, target
