@@ -8,8 +8,7 @@ import numpy as np
 import torch
 import torchvision.transforms as T
 from imgaug.augmentables.bbs import BoundingBox, BoundingBoxesOnImage
-from torch.utils.data import DataLoader
-from torch.utils.data.sampler import SubsetRandomSampler
+from torch.utils.data import Subset, DataLoader
 
 from beetect import BeeDatasetVid, AugTransform
 from beetect.utils import Map
@@ -29,18 +28,27 @@ parser.add_argument('--cpu', action='store_true', help='manually change to cpu')
 def main():
     args = parser.parse_args()
 
-    dataset = BeeDatasetVid(annot_dir=args.annots, img_dir=args.images,
-                            transform=AugTransform(train=False))
-
-    valid_size = 0.1
-    num_train = len(dataset)
-    indices = list(range(num_train))
-    split = int(np.floor(valid_size * num_train))
-    train_idx, valid_idx = indices[split:], indices[:split]
-    train_sampler = SubsetRandomSampler(train_idx)
-    valid_sampler = SubsetRandomSampler(valid_idx)
-
     device = torch.device('cpu' if args.cpu else 'cuda')
+
+    dataset = Map({
+        x: BeeDatasetVid(annot_dir=args.annots, img_dir=args.images,
+                      transform=AugTransform(train=(x is 'train')))
+        for x in ['train', 'val']
+    })
+
+    # split the dataset to train and val
+    # indices = torch.randperm(len(dataset.train)).tolist()
+    indices = list(range(len(dataset.train)))
+    dataset.train = Subset(dataset.train, indices[:-50])
+    dataset.val = Subset(dataset.val, indices[-50:])
+
+    # define training and validation data loaders
+    data_loader = Map({
+        x: DataLoader(
+            dataset[x], batch_size=5, shuffle=True,
+            num_workers=0, pin_memory=True, collate_fn=collate_fn)
+        for x in ['train', 'val']
+    })
 
     # plot(dataset)
 
@@ -49,17 +57,13 @@ def main():
     # for idx, (data, image) in enumerate(dataset):
     #     print(idx)
 
-    data_loader = DataLoader(dataset, batch_size=5, sampler=train_sampler,
-                             num_workers=0, pin_memory=True,
-                             collate_fn=collate_fn)
-
     test_transform = GeneralizedRCNNTransform(
         min_size=224, max_size=448, image_mean=[0.485, 0.456, 0.406],
         image_std = [0.229, 0.224, 0.225]
     )
 
     # print(dataset)
-    for i, batch in enumerate(data_loader):
+    for i, batch in enumerate(data_loader.train):
 
         images, targets = convert_batch_to_tensor(batch, device=device)
         image_list, targets = test_transform(images, targets)
