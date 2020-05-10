@@ -208,7 +208,11 @@ def resize_boxes(boxes, original_size, new_size):
         for s, s_orig in zip(new_size, original_size)
     ]
     ratio_height, ratio_width = ratios
-    xmin, ymin, xmax, ymax = boxes.unbind(1)
+    try:
+        xmin, ymin, xmax, ymax = boxes.unbind(1)
+    except Exception as e:
+        print(target)
+        ValueError('Boxes unbinding failed')
 
     xmin = xmin * ratio_width
     xmax = xmax * ratio_width
