@@ -22,7 +22,7 @@ def main():
     else:
         map_location='cpu'
 
-    checkpoint_path = './resnet50.pt'
+    checkpoint_path = './resnet50_fpn_kaggle.pt'
     # checkpoint_path = './resnet18_model.pt'
 
     checkpoint = torch.load(checkpoint_path, map_location=map_location)

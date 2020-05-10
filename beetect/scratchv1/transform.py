@@ -123,6 +123,7 @@ class GeneralizedRCNNTransform(nn.Module):
             return image, target
 
         bbox = target["boxes"]
+        print(bbox)
         bbox = resize_boxes(bbox, (h, w), image.shape[-2:])
         target["boxes"] = bbox
 

@@ -5,10 +5,12 @@ import matplotlib.patches as patches
 import imgaug as ia
 import imgaug.augmenters as iaa
 import numpy as np
+import torch
 import torchvision.transforms as T
 from imgaug.augmentables.bbs import BoundingBox, BoundingBoxesOnImage
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
+
 from beetect import BeeDatasetVid, AugTransform
 from beetect.utils import Map
 
@@ -25,21 +27,18 @@ parser.add_argument('--image', '--images', type=str, metavar='S',
 def main():
     args = parser.parse_args()
 
-    transform = AugTransform(train=True)
-    dataset = Map({
-        x: BeeDatasetVid(annot_dir=args.annots, img_dir=args.images,
-                         transform=AugTransform(train=(x is 'train')))
-        for x in ['train', 'val']
-    })
+    dataset = BeeDatasetVid(annot_dir=args.annots, img_dir=args.images,
+                            transform=AugTransform(train=False))
 
     valid_size = 0.1
-    num_train = len(dataset.train)
+    num_train = len(dataset)
     indices = list(range(num_train))
     split = int(np.floor(valid_size * num_train))
     train_idx, valid_idx = indices[split:], indices[:split]
     train_sampler = SubsetRandomSampler(train_idx)
     valid_sampler = SubsetRandomSampler(valid_idx)
 
+    device = torch.device('cpu')
 
     # plot(dataset)
 
@@ -48,39 +47,37 @@ def main():
     # for idx, (data, image) in enumerate(dataset):
     #     print(idx)
 
-    data_loader = Map({
-        x: DataLoader(
-            dataset.train, batch_size=5, sampler=train_sampler,
-            num_workers=0, pin_memory=True,
-            collate_fn=collate_fn)
-        for x in ['train', 'val']
-    })
+    data_loader = DataLoader(dataset, batch_size=5, sampler=train_sampler,
+                             num_workers=0, pin_memory=True,
+                             collate_fn=collate_fn)
 
-    # next(iter(data_loader))
-    for i, (images, targets) in enumerate(data_loader.train):
-        # print(i, target)
 
-        """
-        Since data is normalized, it will show very weird images.
-        For real images, comment Normalize() in transform.py
-        """
+    for i, batch in enumerate(data_loader):
 
-        fig = plt.figure()
+        images, targets = convert_batch_to_tensor(batch, device=device)
 
-        # reverse dims e.g. (3, 224, 244) => (224, 244, 3)
-        # since plt accepts channel as the last dim
-        image = images[0].permute(1, 2, 0)
-        target = targets[0]
+        for target in targets:
+            try:
+                xmin, ymin, xmax, ymax = target['boxes'].unbind(1)
+            except Exception as e:
+                print(target['boxes'].shape)
 
-        bbs = BoundingBoxesOnImage([
-            BoundingBox(x1=x[0], x2=x[2], y1=x[1], y2=x[3]) for x in target['boxes']
-        ], shape=image.shape)
-
-        image_bbs = bbs.draw_on_image(image, size=2, color=[0, 0, 255])
-
-        plt.imshow((image_bbs * 255).astype(np.uint8))
-        plt.show()
-        plt.pause(1)
+        # fig = plt.figure()
+        #
+        # # reverse dims e.g. (3, 224, 244) => (224, 244, 3)
+        # # since plt accepts channel as the last dim
+        # image = images[0].permute(1, 2, 0)
+        # target = targets[0]
+        #
+        # bbs = BoundingBoxesOnImage([
+        #     BoundingBox(x1=x[0], x2=x[2], y1=x[1], y2=x[3]) for x in target['boxes']
+        # ], shape=image.shape)
+        #
+        # image_bbs = bbs.draw_on_image(image, size=2, color=[0, 0, 255])
+        #
+        # plt.imshow((image_bbs * 255).astype(np.uint8))
+        # plt.show()
+        # plt.pause(1)
 
 
 def plot(dataset, num_images=4):
@@ -131,6 +128,13 @@ def collate_fn(batch):
     return [data, target]
     """reference: vision/references/detection/utils.py"""
     # return tuple(zip(*batch))
+
+
+def convert_batch_to_tensor(batch, device):
+    batch_images, batch_targets = batch
+    images = list(image.to(device) for image in batch_images)
+    targets = [{k: v.to(device) for k, v in t.items()} for t in batch_targets]
+    return images, targets
 
 
 if __name__ == '__main__':

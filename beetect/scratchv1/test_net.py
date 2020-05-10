@@ -2,12 +2,12 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 import torch
-from beetect.scratchv1 import resnet50
+from beetect.scratchv1 import resnet50_fpn
 from torch import nn
 
 
 def main():
-    model = resnet50()
+    model = resnet50_fpn()
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 

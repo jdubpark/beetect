@@ -189,6 +189,8 @@ def train(train_loader, model, optimizer, epoch, device, running_batch, args):
         # measure data loading time
         data_time.update(time.time() - end)
 
+        print('=' * 10)
+        print(batch[1][0]['boxes'])
         images, targets = convert_batch_to_tensor(batch, device=device)
 
         # compute output

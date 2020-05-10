@@ -41,7 +41,7 @@ class BeeDatasetVid(Dataset):
 
         self.frame_lists = [f for f in self.annot_lists.keys()]
 
-        print(self.img_dirs)
+        # print(self.img_dirs)
 
         self.transform = transform
         self.ext = '.' + ext
