@@ -5,9 +5,10 @@ import string
 import xml.etree.ElementTree as ET
 from PIL import Image
 
+import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
-from imgaug.augmentables.bbs import BoundingBox, BoundingBoxesOnImage
+
 from beetect.utils import Map
 
 
@@ -40,11 +41,7 @@ class BeeDatasetVid(Dataset):
 
         self.frame_lists = [f for f in self.annot_lists.keys()]
 
-        for name in self.frame_lists:
-            if name not in self.annot_lists:
-                print(name)
-
-        # print(self.img_dirs)
+        print(self.img_dirs)
 
         self.transform = transform
         self.ext = '.' + ext
@@ -59,14 +56,9 @@ class BeeDatasetVid(Dataset):
         Format:
             image: PIL image of size (H, W)
             target: dict {
-                boxes (FloatTensor[N, 4]): [x0, y0, x1, y1] (N bounding boxes)
-                lables (Int64Tensor[N])
-                image_id (Int64Tensor[1]): unique for all images
-                area (Tensor[N]): bbox area (used with the COCO metric)
-                iscrowd (UInt8Tensor[N])
-                # optional
-                masks (UInt8Tensor[N, H, W])
-                keypoitns (FloatTensor[N, K, 3]): K=[x, y, visibility]
+                boxes (list[N, 4]): [x0, y0, x1, y1] (N bounding boxes)
+                labels (Int64[N])
+                image_id (Int64[1]): unique for all images
             }
         """
 
@@ -82,20 +74,19 @@ class BeeDatasetVid(Dataset):
         boxes = self.annot_lists[pframe]
         num_boxes = len(boxes)
 
-        # boxes = torch.as_tensor(boxes)
         # there is only one label for all frames (bee body)
         labels = torch.ones((num_boxes,), dtype=torch.int64)
+        image_id = torch.tensor([idx], dtype=torch.int64)
 
         target = Map({})
-        target.boxes = torch.tensor(boxes, dtype=torch.float32).to(self.device)
+        target.boxes = boxes # later changed to tensor
         target.labels = labels
-        target.image_id = torch.tensor([int(frame)], dtype=torch.int64)
-        print(torch.all(torch.tensor(boxes).eq(target.boxes)))
+        target.image_id = image_id
 
         if self.transform:
             image, target = self.transform(image, target)
 
-        return image, target
+        return image, target, pframe
 
     def read_annot_file(self, annot_file):
         """
@@ -112,7 +103,7 @@ class BeeDatasetVid(Dataset):
 
         # generate unique prefix for identification
         prefix_len = 4
-        rand_prefix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=prefix_len))
+        rand_prefix = ''.join(random.choices(string.ascii_letters + string.digits, k=prefix_len))
 
         # a track contains all annotated frames for an object
         tracks = [c for c in root if c.tag == 'track']
@@ -132,6 +123,8 @@ class BeeDatasetVid(Dataset):
                 # bbox position top left, bottom right
                 bbox = [attr['xtl'], attr['ytl'], attr['xbr'], attr['ybr']]
                 bbox = [float(n) for n in bbox] # string to float
+                if len(bbox) is False:
+                    print(pframe, bbox)
 
                 # set up frame obj in frames
                 if pframe not in annot_frames:

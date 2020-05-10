@@ -40,9 +40,14 @@ class ImageList(object):
 
 class GeneralizedRCNNTransform(nn.Module):
     """
-    Provides postprocessing of detections
-
     FROM: https://github.com/pytorch/vision/blob/master/torchvision/models/detection/transform.py
+
+    Performs input / target transformation before feeding the data to a GeneralizedRCNN
+    model.
+    The transformations it perform are:
+        - input normalization (mean subtraction and std division)
+        - input / target resizing to match min_size / max_size
+    It returns a ImageList for the inputs, and a List[Dict[Tensor]] for the targets
     """
 
     def __init__(self, min_size, max_size, image_mean, image_std):
@@ -55,8 +60,15 @@ class GeneralizedRCNNTransform(nn.Module):
         self.image_std = image_std
 
     def forward(self, images, targets):
+        """
+        Arguments:
+            images,       # type: List[Tensor]
+            targets=None  # type: Optional[List[Dict[str, Tensor]]]
+
+        Returns:
+            type: (...) -> Tuple[ImageList, Optional[List[Dict[str, Tensor]]]]
+        """
         orig_imgs = [img.clone() for img in images]
-        images = [img for img in images]
         for i in range(len(images)):
             image = images[i]
             target = targets[i] if targets is not None else None
