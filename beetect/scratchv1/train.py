@@ -133,9 +133,12 @@ def main():
     #     return
 
     best_loss = 0
-    running_batch = 0 # running batch count for tensorboard
+    running_batch = 0 # running batch counter for tensorboard
 
     for epoch in range(args.start_epoch, args.epochs):
+        # clone for comparing training progress validity check
+        a = list(model.parameters())[0].clone()
+
         # train for one epoch
         running_batch = train(data_loader.train, model, optimizer, epoch, device, running_batch, args)
 
@@ -144,8 +147,16 @@ def main():
 
         writer.add_scalar('epoch loss (val)', loss, epoch)
 
+        # training progress validity check (once per epoch)
+        b = list(model.parameters())[0].clone()
+        # should print True # torch.equal(a.data, b.data) is True means NOT BEING UPDATED
+        print('Parameters being updated? {}'.format(torch.equal(a.data, b.data) is not True))
+        for param_group in optimizer.param_groups:
+            print('Current learning rate: {}'.format(param_group['lr']))
+
         # call learning rate scheduler every epoch
         # StepLR steps by gamma (0.1) every step size (3)
+        # ReduceLROnPlateau, refer to doc.
         # e.g. lr = 1e-4 (epoch < 3) // 1e-5 (3 <= epoch < 6) // 1e-6 (6 <= epoch < 9)
         lr_scheduler.step(loss)
 
@@ -181,16 +192,11 @@ def train(train_loader, model, optimizer, epoch, device, running_batch, args):
     # switch to train mode
     model.train()
 
-    # clone for comparing training progress validity check
-    a = list(model.parameters())[0].clone()
-
     end = time.time()
     for batch_idx, batch in enumerate(train_loader):
         # measure data loading time
         data_time.update(time.time() - end)
 
-        # print('=' * 10)
-        # print(batch[1][0]['boxes'])
         images, targets = convert_batch_to_tensor(batch, device=device)
 
         # compute output
@@ -223,13 +229,6 @@ def train(train_loader, model, optimizer, epoch, device, running_batch, args):
             progress.display(batch_idx)
             writer.add_scalar('batch loss (train)', loss, running_batch)
             running_batch += 1
-
-            # training progress validity check
-            b = list(model.parameters())[0].clone()
-            # should print True # torch.equal(a.data, b.data) is True means NOT BEING UPDATED
-            print('Parameters being updated? {}'.format(torch.equal(a.data, b.data) is not True))
-            for param_group in optimizer.param_groups:
-                print('Current learning rate: {}'.format(param_group['lr']))
 
     return running_batch
 
