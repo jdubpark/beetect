@@ -91,8 +91,7 @@ class BeeDatasetVid(Dataset):
         target.labels = labels
         target.image_id = image_id
 
-        print(target.boxes.size())
-        if target.boxes.size() == 0:
+        if len(target.boxes) == 0:
             print('=' * 10)
 
         if self.transform:
