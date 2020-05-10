@@ -171,6 +171,7 @@ def main():
             'state_dict': model.state_dict(),
             'optimizer': optimizer.state_dict(),
             'loss': best_loss,
+            'args': args,
         }, is_best, args)
 
     writer.close()
