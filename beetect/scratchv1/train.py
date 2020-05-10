@@ -87,7 +87,7 @@ def main():
 
     # split the dataset to train and val
     # indices = torch.randperm(len(dataset.train)).tolist()
-    indices = list(range(len(dataset.train)))
+    indices = torch.randperm(len(dataset.train)).tolist()
     dataset.train = Subset(dataset.train, indices[:-args.val_size])
     dataset.val = Subset(dataset.val, indices[-args.val_size:])
 
@@ -133,9 +133,12 @@ def main():
     #     return
 
     best_loss = 0
-    running_batch = 0 # running batch count for tensorboard
+    running_batch = 0 # running batch counter for tensorboard
 
     for epoch in range(args.start_epoch, args.epochs):
+        # clone for comparing training progress validity check
+        a = list(model.parameters())[0].clone()
+
         # train for one epoch
         running_batch = train(data_loader.train, model, optimizer, epoch, device, running_batch, args)
 
@@ -144,8 +147,16 @@ def main():
 
         writer.add_scalar('epoch loss (val)', loss, epoch)
 
+        # training progress validity check (once per epoch)
+        b = list(model.parameters())[0].clone()
+        # should print True # torch.equal(a.data, b.data) is True means NOT BEING UPDATED
+        print('Parameters being updated? {}'.format(torch.equal(a.data, b.data) is not True))
+        for param_group in optimizer.param_groups:
+            print('Current learning rate: {}'.format(param_group['lr']))
+
         # call learning rate scheduler every epoch
         # StepLR steps by gamma (0.1) every step size (3)
+        # ReduceLROnPlateau, refer to doc.
         # e.g. lr = 1e-4 (epoch < 3) // 1e-5 (3 <= epoch < 6) // 1e-6 (6 <= epoch < 9)
         lr_scheduler.step(loss)
 
@@ -180,9 +191,6 @@ def train(train_loader, model, optimizer, epoch, device, running_batch, args):
 
     # switch to train mode
     model.train()
-
-    # clone for comparing training progress validity check
-    a = list(model.parameters())[0].clone()
 
     end = time.time()
     for batch_idx, batch in enumerate(train_loader):
@@ -221,13 +229,6 @@ def train(train_loader, model, optimizer, epoch, device, running_batch, args):
             progress.display(batch_idx)
             writer.add_scalar('batch loss (train)', loss, running_batch)
             running_batch += 1
-
-            # training progress validity check
-            b = list(model.parameters())[0].clone()
-            # should print True # torch.equal(a.data, b.data) is True means NOT BEING UPDATED
-            print('Parameters being updated? {}'.format(torch.equal(a.data, b.data) is not True))
-            for param_group in optimizer.param_groups:
-                print('Current learning rate: {}'.format(param_group['lr']))
 
     return running_batch
 
@@ -328,11 +329,41 @@ class ProgressMeter(object):
         return '[' + fmt + '/' + fmt.format(num_batches) + ']'
 
 
+def collate_fn(batch):
+    """
+    Reorders a batch for forward
+
+    https://discuss.pytorch.org/t/making-custom-image-to-image-dataset-using-collate-fn-and-dataloader/55951/2
+    default collate: https://github.com/pytorch/pytorch/blob/master/torch/utils/data/_utils/collate.py#L42
+
+    Arguments:
+        batch: List[
+            Tuple(
+                image (List[N, img_size])
+                target (Dict)
+            ), ..., batch_size
+        ]
+
+    type: (...) -> List[Tuple[image, target], ..., batch_size]
+    """
+    # filter out batch item with empty target
+    batch = [item for item in batch if item[1]['boxes'].size()[0] is not None]
+    # reorder items
+    image = [item[0] for item in batch]
+    target = [item[1] for item in batch]
+    return [image, target]
+
+    """reference: vision/references/detection/utils.py"""
+    # return tuple(zip(*batch))
+
+
 def convert_batch_to_tensor(batch, device):
     """Convert a batch (list) of images and targets to tensor CPU/GPU
     reference: https://github.com/pytorch/vision/blob/master/references/detection/engine.py#L27
     L27: images = list(image.to(device) for image in images)
     L28: targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+
+    default collate: https://github.com/pytorch/pytorch/blob/master/torch/utils/data/_utils/collate.py#L42
     """
     batch_images, batch_targets = batch
 
@@ -343,12 +374,6 @@ def convert_batch_to_tensor(batch, device):
     targets = [{k: v.to(device) for k, v in t.items()} for t in batch_targets]
 
     return images, targets
-
-
-def collate_fn(batch):
-    data = [item[0] for item in batch]
-    target = [item[1] for item in batch]
-    return [data, target]
 
 
 if __name__ == '__main__':

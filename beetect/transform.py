@@ -1,5 +1,6 @@
-import torch
 import numpy as np
+import torch
+import torchvision.transforms as T
 from albumentations import (
     Compose,
     BboxParams,
@@ -11,7 +12,6 @@ from albumentations import (
     RandomCrop,
     Crop
 )
-import torchvision.transforms as T
 
 class AugTransform:
     """Flexible transforming"""
@@ -41,10 +41,10 @@ class AugTransform:
             return image
 
         aug_arg['bboxes'] = target.boxes
-        aug_arg['labels'] = target.labels.numpy()
+        aug_arg['labels'] = target.labels
         augmented = self.aug_train(**aug_arg)
 
-        # target.boxes =
+        # convert to tensor
         image = T.ToTensor()(augmented['image'])
         target.boxes = torch.as_tensor(augmented['bboxes'], dtype=torch.float32)
 
