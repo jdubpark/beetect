@@ -87,7 +87,7 @@ def main():
 
     # split the dataset to train and val
     # indices = torch.randperm(len(dataset.train)).tolist()
-    indices = list(range(len(dataset.train)))
+    indices = torch.randperm(len(dataset.train)).tolist()
     dataset.train = Subset(dataset.train, indices[:-args.val_size])
     dataset.val = Subset(dataset.val, indices[-args.val_size:])
 
@@ -330,11 +330,41 @@ class ProgressMeter(object):
         return '[' + fmt + '/' + fmt.format(num_batches) + ']'
 
 
+def collate_fn(batch):
+    """
+    Reorders a batch for forward
+
+    https://discuss.pytorch.org/t/making-custom-image-to-image-dataset-using-collate-fn-and-dataloader/55951/2
+    default collate: https://github.com/pytorch/pytorch/blob/master/torch/utils/data/_utils/collate.py#L42
+
+    Arguments:
+        batch: List[
+            Tuple(
+                image (List[N, img_size])
+                target (Dict)
+            ), ..., batch_size
+        ]
+
+    type: (...) -> List[Tuple[image, target], ..., batch_size]
+    """
+    # filter out batch item with empty target
+    batch = [item for item in batch if item[1]['boxes'].size()[0] is not None]
+    # reorder items
+    image = [item[0] for item in batch]
+    target = [item[1] for item in batch]
+    return [image, target]
+
+    """reference: vision/references/detection/utils.py"""
+    # return tuple(zip(*batch))
+
+
 def convert_batch_to_tensor(batch, device):
     """Convert a batch (list) of images and targets to tensor CPU/GPU
     reference: https://github.com/pytorch/vision/blob/master/references/detection/engine.py#L27
     L27: images = list(image.to(device) for image in images)
     L28: targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+
+    default collate: https://github.com/pytorch/pytorch/blob/master/torch/utils/data/_utils/collate.py#L42
     """
     batch_images, batch_targets = batch
 
@@ -345,12 +375,6 @@ def convert_batch_to_tensor(batch, device):
     targets = [{k: v.to(device) for k, v in t.items()} for t in batch_targets]
 
     return images, targets
-
-
-def collate_fn(batch):
-    data = [item[0] for item in batch]
-    target = [item[1] for item in batch]
-    return [data, target]
 
 
 if __name__ == '__main__':

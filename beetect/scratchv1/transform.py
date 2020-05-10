@@ -65,12 +65,9 @@ class GeneralizedRCNNTransform(nn.Module):
             images,       # type: List[Tensor]
             targets=None  # type: Optional[List[Dict[str, Tensor]]]
 
-        Returns:
-            type: (...) -> Tuple[ImageList, Optional[List[Dict[str, Tensor]]]]
+        type: (...) -> Tuple[ImageList, Optional[List[Dict[str, Tensor]]]]
         """
         orig_imgs = [img.clone() for img in images]
-        # print(targets[0]['boxes'])
-
         for i in range(len(images)):
             image = images[i]
             target = targets[i] if targets is not None else None

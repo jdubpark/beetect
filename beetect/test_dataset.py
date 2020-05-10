@@ -37,12 +37,12 @@ def main():
     })
 
     # split the dataset to train and val
-    # indices = torch.randperm(len(dataset.train)).tolist()
-    indices = list(range(len(dataset.train)))
+    indices = torch.randperm(len(dataset.train)).tolist()
     dataset.train = Subset(dataset.train, indices[:-50])
     dataset.val = Subset(dataset.val, indices[-50:])
 
     # define training and validation data loaders
+    # uses random sampler
     data_loader = Map({
         x: DataLoader(
             dataset[x], batch_size=5, shuffle=True,
@@ -62,8 +62,11 @@ def main():
         image_std = [0.229, 0.224, 0.225]
     )
 
+    # print(next(enumerate(data_loader.train)))
+
     # print(dataset)
     for i, batch in enumerate(data_loader.train):
+        # images, targets = batch
         images, targets = convert_batch_to_tensor(batch, device=device)
         # image_list, targets = test_transform(images, targets)
         for target in targets:
@@ -71,6 +74,7 @@ def main():
                 xmin, ymin, xmax, ymax = target['boxes'].unbind(1)
             except Exception as e:
                 print(target)
+                raise ValueError('Unbind error')
 
         # fig = plt.figure()
         #
@@ -130,12 +134,29 @@ def show_annots(ax, image, target):
 
 
 def collate_fn(batch):
-    """Return a list of lists for batch
-    https://discuss.pytorch.org/t/making-custom-image-to-image-dataset-using-collate-fn-and-dataloader/55951/2
     """
-    data = [item[0] for item in batch]
+    Reorders a batch for forward
+
+    https://discuss.pytorch.org/t/making-custom-image-to-image-dataset-using-collate-fn-and-dataloader/55951/2
+    default collate: https://github.com/pytorch/pytorch/blob/master/torch/utils/data/_utils/collate.py#L42
+
+    Arguments:
+        batch: List[
+            Tuple(
+                image (List[N, img_size])
+                target (Dict)
+            ), ..., batch_size
+        ]
+
+    type: (...) -> List[Tuple[image, target], ..., batch_size]
+    """
+    # filter out batch item with empty target
+    batch = [item for item in batch if item[1]['boxes'].size()[0] > 0]
+    # reorder items
+    image = [item[0] for item in batch]
     target = [item[1] for item in batch]
-    return [data, target]
+    return [image, target]
+
     """reference: vision/references/detection/utils.py"""
     # return tuple(zip(*batch))
 
