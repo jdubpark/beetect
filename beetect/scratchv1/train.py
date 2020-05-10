@@ -347,7 +347,7 @@ def collate_fn(batch):
     type: (...) -> List[Tuple[image, target], ..., batch_size]
     """
     # filter out batch item with empty target
-    batch = [item for item in batch if item[1]['boxes'].size()[0] is not None]
+    batch = [item for item in batch if item[1]['boxes'].size()[0] > 0]
     # reorder items
     image = [item[0] for item in batch]
     target = [item[1] for item in batch]
