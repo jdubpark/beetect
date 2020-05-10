@@ -22,6 +22,7 @@ parser.add_argument('--annot', '--annots', type=str, metavar='S',
                     dest='annots', help='annotation directory')
 parser.add_argument('--image', '--images', type=str, metavar='S',
                     dest='images', help='images directory')
+parser.add_argument('--cpu', action='store_true', help='manually change to cpu')
 
 
 def main():
@@ -38,7 +39,7 @@ def main():
     train_sampler = SubsetRandomSampler(train_idx)
     valid_sampler = SubsetRandomSampler(valid_idx)
 
-    device = torch.device('cpu')
+    device = torch.device('cpu' if args.cpu else 'cuda')
 
     # plot(dataset)
 
@@ -52,7 +53,8 @@ def main():
                              collate_fn=collate_fn)
 
     # print(dataset)
-    # for i, batch in enumerate(data_loader):
+    for i, batch in enumerate(data_loader):
+        continue
     #
     #     images, targets = convert_batch_to_tensor(batch, device=device)
     #

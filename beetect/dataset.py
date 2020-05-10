@@ -42,14 +42,14 @@ class BeeDatasetVid(Dataset):
         self.frame_lists = [f for f in self.annot_lists.keys()]
 
         # print(self.frame_lists)
-        is_empty = False
-        for name in self.frame_lists:
-            if len(self.annot_lists[name]) is False:
-                is_empty = True
-                print(name)
-        if is_empty is False:
-            print('Not empty at all')
         # print(self.img_dirs)
+        # is_empty = False
+        # for name in self.frame_lists:
+        #     if len(self.annot_lists[name]) is False:
+        #         is_empty = True
+        #         print(name)
+        # if is_empty is False:
+        #     print('Not empty at all')
 
         self.transform = transform
         self.ext = '.' + ext
@@ -91,10 +91,14 @@ class BeeDatasetVid(Dataset):
         target.labels = labels
         target.image_id = image_id
 
+        print(target.boxes.size())
+        if target.boxes.size() == 0:
+            print('=' * 10)
+
         if self.transform:
             image, target = self.transform(image, target)
 
-        return image, target, pframe
+        return image, target
 
     def read_annot_file(self, annot_file):
         """
