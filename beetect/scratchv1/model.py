@@ -71,7 +71,7 @@ def resnet50_fpn(pretrained=True, num_classes=2, **kwargs):
 
     # out channels is already defined as 256
     # attach FasterRCNN head
-    model = FasterRCNN(backbone, num_classes=num_classes, min_size=600)
+    model = FasterRCNN(backbone, num_classes=num_classes, min_size=224)
     return model
 
     """
