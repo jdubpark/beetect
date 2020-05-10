@@ -198,10 +198,7 @@ def train(train_loader, model, optimizer, epoch, device, running_batch, args):
 
             # https://github.com/pytorch/vision/blob/master/references/detection/engine.py#L30
 
-            try:
-                loss_dict = model(images, targets)
-            except Exception as e:
-                print(targets)
+            loss_dict = model(images, targets)
             # print(batch_idx, loss_dict)
             loss = compute_total_loss(loss_dict)
 

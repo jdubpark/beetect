@@ -60,7 +60,7 @@ def main():
             try:
                 xmin, ymin, xmax, ymax = target['boxes'].unbind(1)
             except Exception as e:
-                print(target['boxes'].shape)
+                print(target)
 
         # fig = plt.figure()
         #
