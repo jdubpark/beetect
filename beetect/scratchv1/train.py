@@ -189,8 +189,8 @@ def train(train_loader, model, optimizer, epoch, device, running_batch, args):
         # measure data loading time
         data_time.update(time.time() - end)
 
-        print('=' * 10)
-        print(batch[1][0]['boxes'])
+        # print('=' * 10)
+        # print(batch[1][0]['boxes'])
         images, targets = convert_batch_to_tensor(batch, device=device)
 
         # compute output
@@ -198,7 +198,10 @@ def train(train_loader, model, optimizer, epoch, device, running_batch, args):
 
             # https://github.com/pytorch/vision/blob/master/references/detection/engine.py#L30
 
-            loss_dict = model(images, targets)
+            try:
+                loss_dict = model(images, targets)
+            except Exception as e:
+                print(targets)
             # print(batch_idx, loss_dict)
             loss = compute_total_loss(loss_dict)
 

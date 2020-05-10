@@ -69,11 +69,7 @@ class GeneralizedRCNNTransform(nn.Module):
             type: (...) -> Tuple[ImageList, Optional[List[Dict[str, Tensor]]]]
         """
         orig_imgs = [img.clone() for img in images]
-        print(targets[0]['boxes'])
-        for i in range(len(targets)):
-            target = targets[i]
-            if target['boxes'].size() == 0:
-                print('Empty target tensor', targets[i])
+        # print(targets[0]['boxes'])
 
         for i in range(len(images)):
             image = images[i]
@@ -129,11 +125,7 @@ class GeneralizedRCNNTransform(nn.Module):
             return image, target
 
         bbox = target["boxes"]
-        try:
-            bbox = resize_boxes(bbox, (h, w), image.shape[-2:])
-        except Exception as e:
-            print(target)
-            ValueError('Boxes unbinding failed')
+        bbox = resize_boxes(bbox, (h, w), image.shape[-2:])
         target["boxes"] = bbox
 
         return image, target
