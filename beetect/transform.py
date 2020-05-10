@@ -48,7 +48,4 @@ class AugTransform:
         image = T.ToTensor()(augmented['image'])
         target.boxes = torch.as_tensor(augmented['bboxes'], dtype=torch.float32)
 
-        if target.boxes.size()[0] == 0:
-            print(target.boxes)
-
         return image, target

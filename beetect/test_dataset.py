@@ -13,6 +13,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 
 from beetect import BeeDatasetVid, AugTransform
 from beetect.utils import Map
+from beetect.scratchv1.transform import GeneralizedRCNNTransform
 
 ia.seed(1)
 
@@ -52,11 +53,17 @@ def main():
                              num_workers=0, pin_memory=True,
                              collate_fn=collate_fn)
 
+    test_transform = GeneralizedRCNNTransform(
+        min_size=224, max_size=448, image_mean=[0.485, 0.456, 0.406],
+        image_std = [0.229, 0.224, 0.225]
+    )
+
     # print(dataset)
     for i, batch in enumerate(data_loader):
-        continue
+
+        images, targets = convert_batch_to_tensor(batch, device=device)
+        image_list, targets = test_transform(images, targets)
     #
-    #     images, targets = convert_batch_to_tensor(batch, device=device)
     #
     #     for target in targets:
     #         try:
