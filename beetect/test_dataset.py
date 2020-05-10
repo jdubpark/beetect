@@ -64,16 +64,13 @@ def main():
 
     # print(dataset)
     for i, batch in enumerate(data_loader.train):
-
-        images, targets = convert_batch_to_tensor(batch, device=device)
-        image_list, targets = test_transform(images, targets)
-    #
-    #
-    #     for target in targets:
-    #         try:
-    #             xmin, ymin, xmax, ymax = target['boxes'].unbind(1)
-    #         except Exception as e:
-    #             print(target)
+        # images, targets = convert_batch_to_tensor(batch, device=device)
+        # image_list, targets = test_transform(images, targets)
+        for target in targets:
+            try:
+                xmin, ymin, xmax, ymax = target['boxes'].unbind(1)
+            except Exception as e:
+                print(target)
 
         # fig = plt.figure()
         #
