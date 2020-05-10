@@ -129,7 +129,11 @@ class GeneralizedRCNNTransform(nn.Module):
             return image, target
 
         bbox = target["boxes"]
-        bbox = resize_boxes(bbox, (h, w), image.shape[-2:])
+        try:
+            bbox = resize_boxes(bbox, (h, w), image.shape[-2:])
+        except Exception as e:
+            print(target)
+            ValueError('Boxes unbinding failed')
         target["boxes"] = bbox
 
         return image, target
@@ -208,11 +212,7 @@ def resize_boxes(boxes, original_size, new_size):
         for s, s_orig in zip(new_size, original_size)
     ]
     ratio_height, ratio_width = ratios
-    try:
-        xmin, ymin, xmax, ymax = boxes.unbind(1)
-    except Exception as e:
-        print(target)
-        ValueError('Boxes unbinding failed')
+    xmin, ymin, xmax, ymax = boxes.unbind(1)
 
     xmin = xmin * ratio_width
     xmax = xmax * ratio_width
