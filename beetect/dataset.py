@@ -41,6 +41,14 @@ class BeeDatasetVid(Dataset):
 
         self.frame_lists = [f for f in self.annot_lists.keys()]
 
+        # print(self.frame_lists)
+        is_empty = False
+        for name in self.frame_lists:
+            if len(self.annot_lists[name]) is False:
+                is_empty = True
+                print(name)
+        if is_empty is False:
+            print('Not empty at all')
         # print(self.img_dirs)
 
         self.transform = transform
@@ -131,5 +139,10 @@ class BeeDatasetVid(Dataset):
                     annot_frames[pframe] = []
 
                 annot_frames[pframe].append(bbox)
+
+        # print('=' * 20)
+        # print(rand_prefix)
+        # print(annot_frames)
+        # print('=' * 20)
 
         return annot_frames, rand_prefix

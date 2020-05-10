@@ -51,16 +51,16 @@ def main():
                              num_workers=0, pin_memory=True,
                              collate_fn=collate_fn)
 
-
-    for i, batch in enumerate(data_loader):
-
-        images, targets = convert_batch_to_tensor(batch, device=device)
-
-        for target in targets:
-            try:
-                xmin, ymin, xmax, ymax = target['boxes'].unbind(1)
-            except Exception as e:
-                print(target)
+    # print(dataset)
+    # for i, batch in enumerate(data_loader):
+    #
+    #     images, targets = convert_batch_to_tensor(batch, device=device)
+    #
+    #     for target in targets:
+    #         try:
+    #             xmin, ymin, xmax, ymax = target['boxes'].unbind(1)
+    #         except Exception as e:
+    #             print(target)
 
         # fig = plt.figure()
         #
