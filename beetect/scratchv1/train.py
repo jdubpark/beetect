@@ -161,6 +161,7 @@ def main():
         lr_scheduler.step(loss)
 
         # remember best loss and save checkpoint
+        print('Best loss: {} // Current loss: {}'.format(best_loss, loss))
         is_best = loss < best_loss
         best_loss = min(loss, best_loss)
 

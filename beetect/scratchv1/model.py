@@ -46,6 +46,8 @@ def resnet50_fpn(pretrained=True, num_classes=2, **kwargs):
 
     norm_layer = misc_nn_ops.FrozenBatchNorm2d
 
+    # BackboneWithFPN only gets layers specified in return_layers (below)
+    # using IntermediateLayerGetter, so avgpool, fc, etc. aren't important
     backbone = resnet.resnet50(pretrained=pretrained, norm_layer=norm_layer)
 
     # freeze layers
