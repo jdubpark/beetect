@@ -24,6 +24,14 @@ def main():
     #
     # params = model.parameters()
 
+    # printing info for optimizer
+    print('Params to learn:')
+    for name, param in model.named_parameters():
+        if param.requires_grad == True:
+            print('\t', name)
+        else:
+            print('\t NOT -- ', name)
+
     print(model)
     # print(list(params))
 

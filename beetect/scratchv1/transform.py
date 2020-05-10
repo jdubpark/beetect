@@ -67,6 +67,9 @@ class GeneralizedRCNNTransform(nn.Module):
 
         type: (...) -> Tuple[ImageList, Optional[List[Dict[str, Tensor]]]]
         """
+        # copying helps with inference later
+        # i.e. => The expanded size of the tensor (720) must match the existing size (901) at non-singleton dimension 2
+        images = [img for img in images]
         # orig_imgs = [img.clone() for img in images]
         for i in range(len(images)):
             image = images[i]

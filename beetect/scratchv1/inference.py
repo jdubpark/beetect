@@ -1,8 +1,11 @@
-from PIL import Image
+import argparse
+import cv2
+import os
 
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
+import torchvision.ops as ops
 import torchvision.transforms as T
 import imgaug as ia
 import imgaug.augmenters as iaa
@@ -10,93 +13,123 @@ from imgaug.augmentables.bbs import BoundingBox, BoundingBoxesOnImage
 
 from beetect import AugTransform
 from beetect.scratchv1 import resnet50_fpn
-from beetect.scratchv1.transform import GeneralizedRCNNTransform
 
 ia.seed(1)
 
+parser = argparse.ArgumentParser(description='Beetect Inference')
+parser.add_argument('--image', type=str, metavar='S',
+                    help='images file path (mutually exclusive to video)')
+parser.add_argument('--video', type=str, metavar='S',
+                    help='video file path (mutually exclusive to image)')
+parser.add_argument('-c', '--checkpoint', type=str, metavar='S',
+                    dest='checkpoint', help='checkpoint file path')
+
 
 def main():
+    args = parser.parse_args()
+
     model = resnet50_fpn()
+    model.eval()
+
+    # validate args
+    if args.image is not None and args.video is not None:
+        raise ValueError('Argument conflict: image and video are mutually exclusive')
+    if args.image is None and args.video is None:
+        raise ValueError('Argument conflict: either image or video is required')
+    if args.image is not None and os.path.exists(args.image) is False:
+        raise ValueError('Invalid path: image')
+    if args.video is not None and os.path.exists(args.video) is False:
+        raise ValueError('Invalid path: video')
+    if os.path.exists(args.checkpoint) is False:
+        raise ValueError('Invalid path: checkpoint')
+
+    # find map data
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
     if torch.cuda.is_available():
-        map_location=lambda storage, loc: storage.cuda()
+        map_location = lambda storage, loc: storage.cuda()
     else:
-        map_location='cpu'
+        map_location = 'cpu'
 
-    checkpoint_path = './resnet50_fpn_checkpoint.pt'
-    # checkpoint_path = './resnet18_model.pt'
+    # retrieve checkpoint
+    checkpoint = torch.load(args.checkpoint, map_location=map_location)
 
-    checkpoint = torch.load(checkpoint_path, map_location=map_location)
+    # load model
     model.load_state_dict(checkpoint['state_dict'])
     arch = checkpoint['arch']
     epoch = checkpoint['epoch']
     loss = checkpoint['loss']
 
-    # print(list(model.parameters()))
-
-    model.eval()
     # print(model)
+    # print(list(model.parameters()))
+    print(arch, epoch, loss)
+    print('=' * 10)
 
-    # image = Image.open('732.png')
-    image = Image.open('bee1.jpg')
-    # image = Image.open('FudanPed00009.png')
+    if args.image:
+        image = cv2.imread(args.image)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        output = run_inference(image, model, device, iou_threshold=0.1)
+        plot(image, output)
 
+    elif args.video:
+        cap = cv2.VideoCapture(args.video)
+        i = 0
+        while cap.isOpened():
+            print('New frame - {:d}'.format(i))
+            ret, frame = cap.read()
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            output = run_inference(frame, model, device, iou_threshold=0.1)
+            ret_key = plot(frame, output)
+            i += 1
+
+            if ret_key is False:
+                cap.release()
+                break
+
+    cv2.destroyAllWindows()
+
+
+def run_inference(image, model, device, iou_threshold=0.3):
+    """Run inference on image one at a time"""
     image = T.ToTensor()(image)
+    input = image.unsqueeze(0).to(device)
 
-    # image_mean = [0.485, 0.456, 0.406]
-    # image_std = [0.229, 0.224, 0.225]
-    # transform = GeneralizedRCNNTransform(224., 448., image_mean, image_std)
-
-    image = image.unsqueeze(0)
-    # image = transform(image)
-    input = image.to(device)
-
-    # print(image.shape)
-    print(input.size())
     with torch.no_grad():
         output = model(input)
 
-    print(arch, epoch, loss)
-    # print(output)
-
-    output = get_min_score(output)
-    print(output)
-    image = image.permute(1, 2, 0).numpy()
-    plot(image, output)
+    # return first pred nms'ed (only one image)
+    return nms_output(output[0], iou_threshold=iou_threshold)
 
 
-def get_min_score(output, threshold=0.3):
-    target = output[0]
-    boxes = []
-    labels = []
-    scores = []
+def nms_output(output, iou_threshold):
+    """Return nms as model output format"""
+    boxes = output['boxes']
+    scores = output['scores']
+    labels = output['labels']
 
-    for i in range(len(target['scores'].numpy())):
-        score = target['scores'][i]
-        if score >= threshold:
-            boxes.append(target['boxes'][i])
-            labels.append(target['labels'][i])
-            scores.append(target['scores'][i])
+    # nms returns indices to keep
+    keep = ops.nms(boxes, scores, iou_threshold=iou_threshold)
 
-    output[0] = {
-        'boxes': torch.stack(boxes, 0),
-        'labels': torch.stack(labels, 0),
-        'scores': scores,
-    }
-
-    return output
+    return {'boxes': boxes[keep], 'scores': scores[keep], 'labels': labels[keep]}
 
 
-def plot(image, output, color=[0, 0, 255]):
+def plot(image, output, color=[255, 0, 0]):
     bbs = BoundingBoxesOnImage([
-        BoundingBox(x1=x[0], x2=x[2], y1=x[1], y2=x[3]) for x in output[0]['boxes']
+        BoundingBox(x1=x[0], x2=x[2], y1=x[1], y2=x[3]) for x in output['boxes']
     ], shape=image.shape)
 
     image_bbs = bbs.draw_on_image(image, size=2, color=color)
-    fig = plt.figure()
-    plt.imshow(np.clip(image_bbs, 0, 1))
-    plt.show()
+
+    ret_key = False
+    while True:
+        cv2.imshow('Inference', cv2.cvtColor(image_bbs, cv2.COLOR_RGB2BGR))
+        # np.clip(image_bbs, 0, 1)
+
+        k = cv2.waitKey(0) & 0xFF
+        if k == ord('w') or k == ord('q'):
+            ret_key = k == ord('w')
+            break
+
+    return ret_key
 
 
 if __name__ == '__main__':
