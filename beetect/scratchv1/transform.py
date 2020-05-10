@@ -59,7 +59,7 @@ class GeneralizedRCNNTransform(nn.Module):
         self.image_mean = image_mean
         self.image_std = image_std
 
-    def forward(self, images, targets):
+    def forward(self, images, targets=None):
         """
         Arguments:
             images,       # type: List[Tensor]
@@ -67,7 +67,7 @@ class GeneralizedRCNNTransform(nn.Module):
 
         type: (...) -> Tuple[ImageList, Optional[List[Dict[str, Tensor]]]]
         """
-        orig_imgs = [img.clone() for img in images]
+        # orig_imgs = [img.clone() for img in images]
         for i in range(len(images)):
             image = images[i]
             target = targets[i] if targets is not None else None

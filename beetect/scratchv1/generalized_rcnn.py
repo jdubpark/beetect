@@ -61,16 +61,7 @@ class GeneralizedRCNN(nn.Module):
             assert len(val) == 2
             original_image_sizes.append((val[0], val[1]))
 
-        # print('=' * 10)
-        # print(original_image_sizes)
-
         images, targets = self.transform(images, targets)
-
-        # print('=' * 10)
-        # print(images.image_sizes)
-
-        # print('=' * 10)
-        # print(images.tensors)
 
         features = self.backbone(images.tensors)
 
@@ -86,19 +77,8 @@ class GeneralizedRCNN(nn.Module):
         if isinstance(features, torch.Tensor):
             features = OrderedDict([('0', features)])
         proposals, proposal_losses = self.rpn(images, features, targets)
-
-        # print('=' * 10)
-        # print(proposals, proposal_losses)
-
         detections, detector_losses = self.roi_heads(features, proposals, images.image_sizes, targets)
-        #
-        # print('=' * 10)
-        # print(detections, detector_losses)
-
         detections = self.transform.postprocess(detections, images.image_sizes, original_image_sizes)
-        #
-        # print('=' * 10)
-        # print(detections)
 
         losses = {}
         losses.update(detector_losses)

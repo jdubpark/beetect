@@ -7,14 +7,16 @@ import torchvision.transforms as T
 import imgaug as ia
 import imgaug.augmenters as iaa
 from imgaug.augmentables.bbs import BoundingBox, BoundingBoxesOnImage
+
 from beetect import AugTransform
-from beetect.scratchv1 import resnet50
+from beetect.scratchv1 import resnet50_fpn
+from beetect.scratchv1.transform import GeneralizedRCNNTransform
 
 ia.seed(1)
 
 
 def main():
-    model = resnet50()
+    model = resnet50_fpn()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     if torch.cuda.is_available():
@@ -22,7 +24,7 @@ def main():
     else:
         map_location='cpu'
 
-    checkpoint_path = './resnet50_fpn_kaggle.pt'
+    checkpoint_path = './resnet50_fpn_checkpoint.pt'
     # checkpoint_path = './resnet18_model.pt'
 
     checkpoint = torch.load(checkpoint_path, map_location=map_location)
@@ -34,19 +36,24 @@ def main():
     # print(list(model.parameters()))
 
     model.eval()
+    # print(model)
 
     # image = Image.open('732.png')
     image = Image.open('bee1.jpg')
     # image = Image.open('FudanPed00009.png')
+
     image = T.ToTensor()(image)
 
-    # aug = AugTransform(train=False)
-    # image = aug(image)
+    # image_mean = [0.485, 0.456, 0.406]
+    # image_std = [0.229, 0.224, 0.225]
+    # transform = GeneralizedRCNNTransform(224., 448., image_mean, image_std)
 
-    input = image.unsqueeze(0).to(device)
+    image = image.unsqueeze(0)
+    # image = transform(image)
+    input = image.to(device)
 
     # print(image.shape)
-    # print(input.size())
+    print(input.size())
     with torch.no_grad():
         output = model(input)
 

@@ -10,18 +10,17 @@ def resnet18(pretrained=True, num_classes=2, **kwargs):
     model = resnet.resnet50(pretrained=pretrained)
     # get fc in features
     in_features = model.fc.in_features
-    # Detach AvgPooling and head (single fc layer for ResNet), thus leaving only the backbone.
+    # Detach head (single fc layer for ResNet), thus leaving only the backbone.
     # Will be replaced with FasterRCNN head (multiple-heads).
     # For concept of single vs. multiple-heads, see https://stackoverflow.com/a/56004582/13086908
-    backbone = list(model.children())[:-2]
+    backbone = list(model.children())[:-1]
     backbone = nn.Sequential(*backbone)
 
     # define out channels (for FasterRCNN)
     backbone.out_channels = in_features
 
     # attach new head - FasterRCNN
-    model = FasterRCNN(backbone, num_classes=num_classes,
-                       min_size=224)
+    model = FasterRCNN(backbone, num_classes=num_classes)
     return model
 
 
@@ -30,16 +29,15 @@ def resnet50(pretrained=True, num_classes=2, **kwargs):
     model = resnet.resnet50(pretrained=pretrained)
     in_features = model.fc.in_features # 2048 for resnet-50
 
-    # detach avgpool and fc at the end
-    backbone = list(model.children())[:-4]
+    # detach fc at the end
+    backbone = list(model.children())[:-1]
     backbone = nn.Sequential(*backbone)
 
     # define out channels (for FasterRCNN)
     backbone.out_channels = in_features
 
     # attach new head - FasterRCNN
-    model = FasterRCNN(backbone, num_classes=num_classes,
-                       min_size=224)
+    model = FasterRCNN(backbone, num_classes=num_classes)
     return model
 
 
@@ -51,9 +49,9 @@ def resnet50_fpn(pretrained=True, num_classes=2, **kwargs):
     backbone = resnet.resnet50(pretrained=pretrained, norm_layer=norm_layer)
 
     # freeze layers
-    # for name, parameter in backbone.named_parameters():
-    #     if 'layer2' not in name and 'layer3' not in name and 'layer4' not in name:
-    #         parameter.requires_grad_(False)
+    for name, parameter in backbone.named_parameters():
+        if 'layer2' not in name and 'layer3' not in name and 'layer4' not in name:
+            parameter.requires_grad_(False)
 
     return_layers = {'layer1': '0', 'layer2': '1', 'layer3': '2', 'layer4': '3'}
 
@@ -71,9 +69,7 @@ def resnet50_fpn(pretrained=True, num_classes=2, **kwargs):
 
     # out channels is already defined as 256
     # attach FasterRCNN head
-    model = FasterRCNN(backbone, num_classes=num_classes,
-                       min_size=224)
-
+    model = FasterRCNN(backbone, num_classes=num_classes)
     return model
 
     """
