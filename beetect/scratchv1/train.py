@@ -132,7 +132,7 @@ def main():
     #     validate(data_loader.val, model, device, args)
     #     return
 
-    best_loss = 0
+    best_loss = 100
     running_batch = 0 # running batch counter for tensorboard
 
     for epoch in range(args.start_epoch, args.epochs):
