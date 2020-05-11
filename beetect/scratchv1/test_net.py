@@ -43,9 +43,11 @@ def main():
         arch = checkpoint['arch']
         epoch = checkpoint['epoch']
         loss = checkpoint['loss']
+        args = checkpoint['args']
 
         print('=' * 10)
         print(arch, epoch, loss)
+        print(args)
         print('=' * 10)
 
     if args.weights:
