@@ -23,6 +23,8 @@ parser.add_argument('--video', type=str, metavar='S',
                     help='video file path (mutually exclusive to image)')
 parser.add_argument('-c', '--checkpoint', type=str, metavar='S',
                     dest='checkpoint', help='checkpoint file path')
+parser.add_argument('--iou', type=float, metavar='N', default=0.2,
+                    help='IoU threshold (default 0.2)')
 
 
 def main():
@@ -63,7 +65,7 @@ def main():
     if args.image:
         image = cv2.imread(args.image)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        output = run_inference(image, model, device, iou_threshold=0.1)
+        output = run_inference(image, model, device, iou_threshold=args.iou)
         plot(image, output)
 
     elif args.video:
@@ -73,7 +75,7 @@ def main():
             print('New frame - {:d}'.format(i))
             ret, frame = cap.read()
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            output = run_inference(frame, model, device, iou_threshold=0.1)
+            output = run_inference(frame, model, device, iou_threshold=args.iou)
             ret_key = plot(frame, output)
             i += 1
 
