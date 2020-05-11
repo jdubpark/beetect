@@ -285,10 +285,11 @@ def get_transform(train=False):
 
 
 def save_checkpoint(state, is_best, args, ending='checkpoint.pt'):
-    filename = '{}_{}'.format(args.arch, ending)
+    ctime = time.strftime("%Y-%m-%d_%H:%M:%S", time.gmtime())
+    filename = '{}_{}_{}'.format(ctime, args.arch, ending)
     torch.save(state, filename)
     if is_best:
-        shutil.copyfile(filename, '{}_best.pt'.format(args.arch))
+        shutil.copyfile(filename, '{}_{}_best.pt'.format(ctime, args.arch))
 
 
 class AverageMeter(object):
