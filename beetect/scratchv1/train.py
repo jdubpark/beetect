@@ -71,6 +71,7 @@ def main():
     args = parser.parse_args()
 
     model = resnet50_fpn()
+    rand_model = ''.join(random.choices(string.ascii_letters + string.digits, k=4))
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model.to(device)
@@ -132,7 +133,7 @@ def main():
     #     validate(data_loader.val, model, device, args)
     #     return
 
-    best_loss = 100
+    best_loss = 1
     running_batch = 0 # running batch counter for tensorboard
 
     for epoch in range(args.start_epoch, args.epochs):
@@ -173,7 +174,7 @@ def main():
             'optimizer': optimizer.state_dict(),
             'loss': best_loss,
             'args': args,
-        }, is_best, args)
+        }, is_best, rand_model, args)
 
     writer.close()
 
@@ -284,12 +285,11 @@ def get_transform(train=False):
     return AugTransform(train)
 
 
-def save_checkpoint(state, is_best, args, ending='checkpoint.pt'):
-    ctime = time.strftime("%Y-%m-%d_%H:%M:%S", time.gmtime())
-    filename = '{}_{}_{}'.format(ctime, args.arch, ending)
+def save_checkpoint(state, is_best, rand_model, args, ending='checkpoint.pt'):
+    filename = '{}_{}_{}'.format(rand_model, args.arch, ending)
     torch.save(state, filename)
     if is_best:
-        shutil.copyfile(filename, '{}_{}_best.pt'.format(ctime, args.arch))
+        shutil.copyfile(filename, '{}_{}_best.pt'.format(rand_model, args.arch))
 
 
 class AverageMeter(object):
