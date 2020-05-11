@@ -284,8 +284,9 @@ def get_transform(train=False):
     return AugTransform(train)
 
 
-def save_checkpoint(state, is_best, args, filename='checkpoint.pt'):
-    torch.save(state, '{}_{}'.format(args.arch, filename))
+def save_checkpoint(state, is_best, args, ending='checkpoint.pt'):
+    filename = '{}_{}'.format(args.arch, ending)
+    torch.save(state, filename)
     if is_best:
         shutil.copyfile(filename, '{}_best.pt'.format(args.arch))
 
