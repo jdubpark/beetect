@@ -174,7 +174,7 @@ def main():
             'epoch': epoch,
             'state_dict': model.state_dict(),
             'optimizer': optimizer.state_dict(),
-            'loss': best_loss,
+            'loss': loss,
             'args': args,
         }, is_best, rand_model, args)
 
