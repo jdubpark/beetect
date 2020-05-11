@@ -1,4 +1,6 @@
+import argparse
 import matplotlib.pyplot as plt
+import os
 
 import numpy as np
 import torch
@@ -6,36 +8,48 @@ from beetect.scratchv1 import resnet50_fpn
 from torch import nn
 
 
+parser = argparse.ArgumentParser(description='PyTorch ScratchV1 Training')
+parser.add_argument('-c', '--checkpoint', default='', dest='checkpoint',
+                    help='checkpoint file path')
+parser.add_argument('--params', action='store_true', help='Show model parameters')
+parser.add_argument('--weights', action='store_true', help='Show model weights')
+
+
 def main():
+    args = parser.parse_args()
+
     model = resnet50_fpn()
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    if torch.cuda.is_available():
-        map_location=lambda storage, loc: storage.cuda()
-    else:
-        map_location='cpu'
-
-    # checkpoint = torch.load('./resnet18_model.pt', map_location=map_location)
-    # model.load_state_dict(checkpoint['state_dict'])
-    # arch = checkpoint['arch']
-    # epoch = checkpoint['epoch']
-    # loss = checkpoint['loss']
-    #
-    # params = model.parameters()
-
-    # printing info for optimizer
-    print('Params to learn:')
-    for name, param in model.named_parameters():
-        if param.requires_grad == True:
-            print('\t', name)
-        else:
-            print('\t NOT -- ', name)
-
     print(model)
-    # print(list(params))
 
-    # analyze_weights(model)
+    if args.params:
+        params = model.parameters()
+        print('Params to learn:')
+        for name, param in model.named_parameters():
+            if param.requires_grad == True:
+                print('\t', name)
+            else:
+                print('\t NOT -- ', name)
+        # print(list(params))
+
+    if args.checkpoint:
+        if os.path.exists(args.checkpoint) is False:
+            raise ValueError('Invalid path: checkpoint')
+
+        checkpoint = torch.load(args.checkpoint, map_location=device)
+        model.load_state_dict(checkpoint['state_dict'])
+        arch = checkpoint['arch']
+        epoch = checkpoint['epoch']
+        loss = checkpoint['loss']
+
+        print('=' * 10)
+        print(arch, epoch, loss)
+        print('=' * 10)
+
+    if args.weights:
+        analyze_weights(model)
 
 
 def analyze_weights(model):

@@ -45,13 +45,9 @@ def main():
 
     # find map data
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    if torch.cuda.is_available():
-        map_location = lambda storage, loc: storage.cuda()
-    else:
-        map_location = 'cpu'
 
     # retrieve checkpoint
-    checkpoint = torch.load(args.checkpoint, map_location=map_location)
+    checkpoint = torch.load(args.checkpoint, map_location=device)
 
     # load model
     model.load_state_dict(checkpoint['state_dict'])
