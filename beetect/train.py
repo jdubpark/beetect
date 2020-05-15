@@ -13,9 +13,10 @@ import torch.nn as nn
 import torch.optim as O
 from torch.utils.data import Subset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from beetect import BeeDatasetVid, AugTransform
-from beetect.scratchv1 import resnet50_fpn, utils
-from beetect.utils import Map
+
+from beetect.dataset import BeeDatasetVid
+from beetect.utils import Map, AugTransform
+from beetect.model.resnet import resnet50_fpn
 
 model_names = ['resnet50_fpn']
 
@@ -64,10 +65,9 @@ parser.add_argument('-p', '--print-freq', default=5, type=int,
                     metavar='N', help='print frequency (default: 5)')
 parser.add_argument('--anomaly', action='store_true',
                     help='Run train with torch.autograd.detect_anomaly')
+parser.add_argument('--log-dir', default='../runs', type=str, metavar='PATH',
+                    help='path to save tensorboard logs')
 
-
-# Writer will output to ./runs/ directory by default
-writer = SummaryWriter()
 
 def main():
     args = parser.parse_args()
@@ -137,6 +137,9 @@ def main():
 
     best_loss = 1
     running_batch = 0 # running batch counter for tensorboard
+
+    # start writer
+    writer = SummaryWriter(log_dir=args.log_dir)
 
     for epoch in range(args.start_epoch, args.epochs):
         # clone for comparing training progress validity check

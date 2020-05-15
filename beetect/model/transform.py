@@ -2,16 +2,12 @@ import math
 import matplotlib.pyplot as plt
 import random
 
-import imgaug as ia
-import imgaug.augmenters as iaa
 import numpy as np
 import torch
 import torchvision
 from imgaug.augmentables.bbs import BoundingBox, BoundingBoxesOnImage
 from torch import nn
 from torchvision.models.detection.roi_heads import paste_masks_in_image
-
-ia.seed(1)
 
 
 class ImageList(object):

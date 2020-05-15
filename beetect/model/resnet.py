@@ -2,7 +2,7 @@ from torch import nn
 from torchvision.models import resnet
 from torchvision.models.detection.backbone_utils import BackboneWithFPN
 from torchvision.ops import misc as misc_nn_ops
-from beetect.scratchv1.faster_rcnn import FasterRCNN
+from .head.faster_rcnn import FasterRCNN
 
 
 def resnet18(pretrained=True, num_classes=2, **kwargs):

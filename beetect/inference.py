@@ -1,20 +1,16 @@
 import argparse
 import cv2
+import matplotlib.pyplot as plt
 import os
 
 import numpy as np
-import matplotlib.pyplot as plt
 import torch
 import torchvision.ops as ops
 import torchvision.transforms as T
-import imgaug as ia
-import imgaug.augmenters as iaa
 from imgaug.augmentables.bbs import BoundingBox, BoundingBoxesOnImage
 
-from beetect import AugTransform
-from beetect.scratchv1 import resnet50_fpn
+from beetect.model import resnet50_fpn
 
-ia.seed(1)
 
 parser = argparse.ArgumentParser(description='Beetect Inference')
 parser.add_argument('--image', type=str, metavar='S',

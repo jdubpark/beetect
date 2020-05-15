@@ -10,8 +10,8 @@ from torchvision.ops import MultiScaleRoIAlign
 
 from torchvision.models.detection.rpn import AnchorGenerator, RPNHead, RegionProposalNetwork
 from torchvision.models.detection.roi_heads import RoIHeads
-from beetect.scratchv1.transform import GeneralizedRCNNTransform
-from beetect.scratchv1.generalized_rcnn import GeneralizedRCNN
+from .transform import GeneralizedRCNNTransform
+from .generalized_rcnn import GeneralizedRCNN
 
 
 __all__ = [

@@ -1,9 +1,7 @@
 .DS_Store
-dataset
 __pycache__
-venv
 beetect.egg-info
-model/
+checkpoints/
 *.pt
 *.pth
 *.pth.tar
