@@ -15,7 +15,7 @@ import pandas as pd
 #     return [images, targets]
 
 def collater(data):
-    print(data)
+    #print(data)
     data = [item for item in data if item[1].size(0) > 0]
     imgs = [item[0] for item in data]
     boxes = [item[1] for item in data]

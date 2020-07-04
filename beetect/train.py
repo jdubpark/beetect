@@ -149,6 +149,8 @@ if __name__ == '__main__':
 
     args.tensorboard = SummaryWriter(log_dir=log_dir)
 
+    torch.cuda.empty_cache()
+
     is_cuda = torch.cuda.is_available()
     device = torch.device('cuda' if is_cuda else 'cpu')
 
