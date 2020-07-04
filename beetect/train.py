@@ -61,7 +61,7 @@ parser.add_argument('--log_interval', type=int, default=300, help='Log interval 
 iter = 0
 
 
-def iter_step(epoch, total_loss, cls_loss, reg_loss, scheduler, args):
+def iter_step(epoch, mean_loss, cls_loss, reg_loss, scheduler, args):
     global iter
     iter += 1
     tensorboard = args.tensorboard
@@ -70,7 +70,7 @@ def iter_step(epoch, total_loss, cls_loss, reg_loss, scheduler, args):
         tensorboard.add_scalar(tag='loss/cls_loss', scalar_value=cls_loss.item(), global_step=iter)
         tensorboard.add_scalar(tag='loss/reg_loss', scalar_value=reg_loss.item(), global_step=iter)
         tensorboard.add_scalar(tag='loss/total_loss', scalar_value=mean_loss, global_step=iter)
-        tensorboard.add_scalar(tag='lr/lr', scalar_value=scheduler.get_last_lr()[-1], global_step=iter)
+        #tensorboard.add_scalar(tag='lr/lr', scalar_value=scheduler.get_last_lr()[-1], global_step=iter)
 
 
 def train(model, train_loader, scheduler, optimizer, epoch, device, args):
@@ -82,6 +82,7 @@ def train(model, train_loader, scheduler, optimizer, epoch, device, args):
     model.freeze_bn()
 
     pbar = tqdm(train_loader, desc='==> Train', position=1)
+    idx = 0
     for (images, targets) in pbar:
         images = images.to(device).float()
         targets = targets.to(device)
@@ -106,6 +107,7 @@ def train(model, train_loader, scheduler, optimizer, epoch, device, args):
             optimizer.step()
 
         iter_step(epoch, mean_loss, cls_loss, reg_loss, scheduler, args)
+        idx += 1
         pbar.update()
         pbar.set_postfix({
             'Cls_loss': cls_loss.item(),

@@ -158,12 +158,12 @@ class TransformDataset(Dataset):
         image, target = self.transform(image, target)
 
         # customize to EfficientDet
-        annots = []
+        annots = torch.empty(0, 5)
         for i in range(len(target['boxes'])):
             # last is label id
-            annot = np.zeros((1, 5))
+            annot = torch.zeros((1, 5))
             annot[0, :4] = target['boxes'][i]
             annot[0, 4] = target['labels'][i]
-            annots = np.append(annots, annot, axis=0)
-
+            annots = torch.cat((annots, annot), dim=0)
+        print(annots)
         return image, annots

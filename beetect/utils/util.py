@@ -15,15 +15,15 @@ import pandas as pd
 #     return [images, targets]
 
 def collater(data):
-    data = [item for item in data if item[1].size()[0] > 0]
+    print(data)
+    data = [item for item in data if item[1].size(0) > 0]
     imgs = [item[0] for item in data]
     boxes = [item[1] for item in data]
     imgs = torch.from_numpy(np.stack(imgs, axis=0))
     max_num_annots = max(annot.shape[0] for annot in boxes)
 
     if max_num_annots > 0:
-        # annot_padded = torch.ones((len(boxes), max_num_annots, 5)) * -1
-        annot_padded = torch.ones((len(boxes), max_num_annots, 4)) * -1
+        annot_padded = torch.ones((len(boxes), max_num_annots, 5)) * -1
         for idx, annot in enumerate(boxes):
             if annot.shape[0] > 0:
                 annot_padded[idx, :annot.shape[0], :] = annot
