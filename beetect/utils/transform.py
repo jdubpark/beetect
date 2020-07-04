@@ -52,4 +52,4 @@ class AugTransform:
         target['boxes'] = torch.as_tensor(augmented['bboxes'], dtype=torch.float32)
 
         # return image, target
-        return image, target['boxes'] # EfficientDet
+        return image, target

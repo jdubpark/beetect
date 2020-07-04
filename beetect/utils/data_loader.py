@@ -156,6 +156,14 @@ class TransformDataset(Dataset):
 
         image, target = self.dataset[idx] # dataset has __getitem__
         image, target = self.transform(image, target)
-        # Alternatively remove the alpha channel from the tensor (for RGB)
-        # image = image[:3]
-        return image, target
+
+        # customize to EfficientDet
+        annots = []
+        for i in range(len(target['boxes'])):
+            # last is label id
+            annot = np.zeros((1, 5))
+            annot[0, :4] = target['boxes'][i]
+            annot[0, 4] = target['labels'][i]
+            annots = np.append(annots, annot, axis=0)
+
+        return image, annots
