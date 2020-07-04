@@ -165,5 +165,5 @@ class TransformDataset(Dataset):
             annot[0, :4] = target['boxes'][i]
             annot[0, 4] = target['labels'][i]
             annots = torch.cat((annots, annot), dim=0)
-        print(annots)
+        # print(annots)
         return image, annots

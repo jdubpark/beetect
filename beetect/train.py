@@ -89,7 +89,7 @@ def train(model, train_loader, scheduler, optimizer, epoch, device, args):
         images = images.float()
 
         cls_loss, reg_loss = model([images, targets])
-        print(cls_loss, reg_loss)
+        # print(cls_loss, reg_loss)
         cls_loss = cls_loss.mean()
         reg_loss = reg_loss.mean()
         loss = cls_loss + reg_loss
