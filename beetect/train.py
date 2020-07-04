@@ -47,7 +47,7 @@ parser.add_argument('--weight_decay', '-wd', dest='wd', type=float, default=5e-5
 parser.add_argument('--eps', default=1e-6, type=float)
 parser.add_argument('--beta1', default=0.9, type=float)
 parser.add_argument('--beta2', default=0.999, type=float)
-parser.add_argument('--patience', type=int, help='Patience for ReduceLROnPlateau before changing LR value')
+parser.add_argument('--patience', default=3, type=int, help='Patience for ReduceLROnPlateau before changing LR value')
 
 # other
 parser.add_argument('--seed', type=int)
