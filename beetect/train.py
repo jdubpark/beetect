@@ -51,7 +51,7 @@ parser.add_argument('--patience', type=int, help='Patience for ReduceLROnPlateau
 
 # other
 parser.add_argument('--seed', type=int)
-parser.add_argument('--workers', '-j', type=int, help='Number of workers, used only if using GPU')
+parser.add_argument('--workers', '-j', type=int, default=4, help='Number of workers, used only if using GPU')
 parser.add_argument('--start_epoch', type=int, help='Start epoch, used for resume')
 
 # interval
