@@ -5,4 +5,6 @@ checkpoints/
 *.pt
 *.pth
 *.pth.tar
-runs/
+runs*/
+config.txt
+logs/

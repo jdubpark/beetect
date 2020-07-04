@@ -13,19 +13,17 @@ from beetect.model import resnet50_fpn
 
 
 parser = argparse.ArgumentParser(description='Beetect Inference')
-parser.add_argument('--image', type=str, metavar='S',
-                    help='images file path (mutually exclusive to video)')
-parser.add_argument('--video', type=str, metavar='S',
-                    help='video file path (mutually exclusive to image)')
-parser.add_argument('-c', '--checkpoint', type=str, metavar='S',
-                    dest='checkpoint', help='checkpoint file path')
-parser.add_argument('--iou', type=float, metavar='N', default=0.2,
+parser.add_argument('-i', '--image', type=str, dest='image',
+                    help='path to images file (mutually exclusive to video)')
+parser.add_argument('-v', '--video', type=str, dest='video',
+                    help='path to video file (mutually exclusive to image)')
+parser.add_argument('-c', '--checkpoint', type=str, dest='checkpoint',
+                    help='path to checkpoint file')
+parser.add_argument('--iou', type=float, default=0.2,
                     help='IoU threshold (default 0.2)')
 
 
 def main():
-    args = parser.parse_args()
-
     model = resnet50_fpn()
     model.eval()
 
@@ -127,4 +125,7 @@ def plot(image, output, color=[255, 0, 0]):
 
 
 if __name__ == '__main__':
+
+    args = parser.parse_args()
+
     main()

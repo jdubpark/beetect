@@ -1,389 +1,231 @@
 import argparse
-import copy
-import math
 import os
-import random
-import shutil
-import string
+import math
 import time
-
 import numpy as np
+from tqdm import tqdm
+
 import torch
-import torch.nn as nn
 import torch.optim as O
-from torch.utils.data import Subset, DataLoader
-from torch.utils.tensorboard import SummaryWriter
+import torch.backends.cudnn as cudnn
+from torch.nn.utils import clip_grad_norm_
+from torch.utils.data import random_split, DataLoader
 
-from beetect.dataset import BeeDatasetVid
-from beetect.utils import Map, AugTransform
-from beetect.model.resnet import resnet50_fpn
+try:
+    from torch.utils.tensorboard import SummaryWriter
+except ImportError:
+    from tensorboardX import SummaryWriter
 
-model_names = ['resnet50_fpn']
+from model.efficientdet import EfficientDet
+from utils import collater, convert_batch_to_tensor, BeeDataset, TransformDataset, AugTransform
 
-# reference: https://github.com/pytorch/examples/blob/master/imagenet/main.py
-parser = argparse.ArgumentParser(description='PyTorch ScratchV1 Training')
-parser.add_argument('-a', '--arch', default='resnet50_fpn', metavar='ARCH',
-                    choices=model_names,
-                    help='model architecture: '+
-                        ' | '.join(model_names) +
-                        ' (default: resnet50_fpn)')
-parser.add_argument('--annot', '--annots', type=str, metavar='S',
-                    dest='annots', help='annotation directory')
-parser.add_argument('--image', '--images', type=str, metavar='S',
-                    dest='images', help='images directory')
-parser.add_argument('-j', '--workers', default=0, type=int, metavar='N',
-                    help='number of data loading workers (default: 0)')
-parser.add_argument('--epochs', default=30, type=int, metavar='N',
-                    help='number of total epochs to run')
-parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
-                    help='evaluate model on validation set')
-parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
-                    help='manual epoch number (useful on restarts)')
-parser.add_argument('-b', '--batch-size', dest='batch_size',
-                    default=128, type=int, metavar='N',
-                    help='mini-batch size (default: 128), this is the total '
-                         'batch size of all GPUs on the current node when '
-                         'using Data Parallel or Distributed Data Parallel')
-parser.add_argument('--lr', '--learning-rate', default=0.01, type=float,
-                    metavar='LR', help='initial learning rate (default: 0.01)',
-                    dest='lr')
-parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
-                    help='momentum (default: 0.9)')
-parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float,
-                    metavar='W', help='weight decay (default: 1e-4)',
-                    dest='weight_decay')
-parser.add_argument('--step-size', default=3, type=int, metavar='N',
-                    help='lr step size (default: 3)')
-parser.add_argument('--gamma', default=0.1, type=float, metavar='N',
-                    help='gamma (default: 0.1)')
-parser.add_argument('--val-size', default=50, type=int, metavar='N',
-                    help='number of images used for val dataset',
-                    dest='val_size')
-parser.add_argument('--resume', default='', type=str, metavar='PATH',
-                    help='path to latest checkpoint (default: none)')
-parser.add_argument('-p', '--print-freq', default=5, type=int,
-                    metavar='N', help='print frequency (default: 5)')
-parser.add_argument('--anomaly', action='store_true',
-                    help='Run train with torch.autograd.detect_anomaly')
-parser.add_argument('--log-dir', default='../runs', type=str, metavar='PATH',
-                    help='path to save tensorboard logs')
+"""
+Train with single GPU. For distributed training,
+use dist-train.py, which requires mpi and horovod
+"""
+
+parser = argparse.ArgumentParser(description='Beetect Training')
+
+# dirs
+parser.add_argument('--dump_dir', '-O', type=str)
+parser.add_argument('--annot_dir', '-A', type=str)
+parser.add_argument('--img_dir', '-I', type=str)
+parser.add_argument('--resume', '-R', type=str, help='Checkpoint file path to resume training')
+parser.add_argument('--state_dict_dir', '-S', type=str, help='Local state dict in case downloading does not work')
+
+# training
+parser.add_argument('--n_epoch', type=int, default=30)
+parser.add_argument('--batch_size', '-b', type=int, default=32)
+parser.add_argument('--num_class', type=int, default=2)
+parser.add_argument('--grad_accum_steps', type=int, default=1,
+                    help='Gradient accumulation steps, used to increase batch size before optimizing to offset GPU memory constraint')
+parser.add_argument('--max_grad_norm', type=float, default=0.1)
+
+# hyperparams
+parser.add_argument('--learning_rate', '-lr', dest='lr', type=float, default=0.01)
+parser.add_argument('--weight_decay', '-wd', dest='wd', type=float, default=5e-5)
+parser.add_argument('--eps', default=1e-6, type=float)
+parser.add_argument('--beta1', default=0.9, type=float)
+parser.add_argument('--beta2', default=0.999, type=float)
+parser.add_argument('--patience', type=int, help='Patience for ReduceLROnPlateau before changing LR value')
+
+# other
+parser.add_argument('--seed', type=int)
+parser.add_argument('--workers', '-j', type=int, help='Number of workers, used only if using GPU')
+parser.add_argument('--start_epoch', type=int, help='Start epoch, used for resume')
+
+# interval
+parser.add_argument('--log_interval', type=int, default=300, help='Log interval per X iterations')
 
 
-def main():
-    args = parser.parse_args()
-
-    model = resnet50_fpn()
-    rand_model = ''.join(random.choices(string.ascii_letters + string.digits, k=4))
-
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    model.to(device)
-
-    # prepare dataset
-    annot_dir = args.annots
-    img_dir = args.images
-
-    dataset = Map({
-        x: BeeDatasetVid(annot_dir=annot_dir, img_dir=img_dir,
-                      transform=get_transform(train=(x is 'train')))
-        for x in ['train', 'val']
-    })
-
-    # split the dataset to train and val
-    # indices = torch.randperm(len(dataset.train)).tolist()
-    indices = torch.randperm(len(dataset.train)).tolist()
-    dataset.train = Subset(dataset.train, indices[:-args.val_size])
-    dataset.val = Subset(dataset.val, indices[-args.val_size:])
-
-    # define training and validation data loaders
-    data_loader = Map({
-        x: DataLoader(
-            dataset[x], batch_size=args.batch_size, shuffle=True,
-            num_workers=args.workers, pin_memory=True, collate_fn=collate_fn)
-        for x in ['train', 'val']
-    })
-
-    # optimizer, take parameters directly since we are fine-tuning
-    params = model.parameters() # [p for p in models.parameters() if p.requires_grad]
-    optimizer = O.SGD(params, lr=args.lr,
-                      momentum=args.momentum, weight_decay=args.weight_decay)
-
-    # learning rate scheduler
-    # lr_scheduler = O.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
-    lr_scheduler = O.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5)
-
-    # printing info for optimizer
-    # print('Params to learn:')
-    # for name, param in model.named_parameters():
-    #     if param.requires_grad == True:
-    #         print('\t', name)
-
-    # optionally resume training from a checkpoint
-    if args.resume:
-        if os.path.isfile(args.resume):
-            print("=> loading checkpoint '{}'".format(args.resume))
-            checkpoint = torch.load(args.resume)
-            args.start_epoch = checkpoint['epoch']
-            best_loss = checkpoint['loss']
-            model.load_state_dict(checkpoint['state_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer'])
-            print("=> loaded checkpoint '{}' (epoch {})"
-                  .format(args.resume, checkpoint['epoch']))
-        else:
-            print("=> no checkpoint found at '{}'".format(args.resume))
-
-    # if args.evaluate:
-    #     validate(data_loader.val, model, device, args)
-    #     return
-
-    best_loss = 1
-    running_batch = 0 # running batch counter for tensorboard
-
-    # start writer
-    writer = SummaryWriter(log_dir=args.log_dir)
-
-    for epoch in range(args.start_epoch, args.epochs):
-        # clone for comparing training progress validity check
-        a = list(model.parameters())[0].clone()
-
-        # train for one epoch
-        running_batch = train(data_loader.train, model, optimizer, epoch, device, running_batch, args)
-
-        # evaluate on val set
-        loss = validate(data_loader.val, model, device, args)
-
-        writer.add_scalar('epoch loss (val)', loss, epoch)
-
-        # training progress validity check (once per epoch)
-        b = list(model.parameters())[0].clone()
-        # should print True # torch.equal(a.data, b.data) is True means NOT BEING UPDATED
-        print('Parameters being updated? {}'.format(torch.equal(a.data, b.data) is not True))
-        for param_group in optimizer.param_groups:
-            print('Current learning rate: {}'.format(param_group['lr']))
-
-        # call learning rate scheduler every epoch
-        # StepLR steps by gamma (0.1) every step size (3)
-        # ReduceLROnPlateau, refer to doc.
-        # e.g. lr = 1e-4 (epoch < 3) // 1e-5 (3 <= epoch < 6) // 1e-6 (6 <= epoch < 9)
-        lr_scheduler.step(loss)
-
-        # remember best loss and save checkpoint
-        print('Best loss: {} // Current loss: {}'.format(best_loss, loss))
-        is_best = loss < best_loss
-        best_loss = min(loss, best_loss)
-
-        # save checkpoint
-        save_checkpoint({
-            'arch': args.arch,
-            'epoch': epoch,
-            'state_dict': model.state_dict(),
-            'optimizer': optimizer.state_dict(),
-            'loss': loss,
-            'args': args,
-        }, is_best, rand_model, args)
-
-    writer.close()
+iter = 0
 
 
-def train(train_loader, model, optimizer, epoch, device, running_batch, args):
-    """ Similar torchvision function is available
-    function: train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq)
-    source: https://github.com/pytorch/vision/blob/master/references/detection/engine.py#L13
-    """
-    batch_time = AverageMeter('Time', ':6.3f')
-    data_time = AverageMeter('Data', ':6.3f')
-    losses = AverageMeter('Loss', ':.4e')
-    progress = ProgressMeter(
-        len(train_loader),
-        [batch_time, data_time, losses],
-        prefix="Epoch: {}/{}".format(epoch, args.epochs - 1))
+def iter_step(epoch, total_loss, cls_loss, reg_loss, scheduler, args):
+    global iter
+    iter += 1
+    tensorboard = args.tensorboard
 
-    # switch to train mode
+    if iter % args.log_interval:
+        tensorboard.add_scalar(tag='loss/cls_loss', scalar_value=cls_loss.item(), global_step=iter)
+        tensorboard.add_scalar(tag='loss/reg_loss', scalar_value=reg_loss.item(), global_step=iter)
+        tensorboard.add_scalar(tag='loss/total_loss', scalar_value=mean_loss, global_step=iter)
+        tensorboard.add_scalar(tag='lr/lr', scalar_value=scheduler.get_last_lr()[-1], global_step=iter)
+
+
+def train(model, train_loader, scheduler, optimizer, epoch, device, args):
+    start = time.time()
+    total_loss = []
+
     model.train()
+    model.is_training = True
+    model.freeze_bn()
 
-    end = time.time()
-    for batch_idx, batch in enumerate(train_loader):
-        # measure data loading time
-        data_time.update(time.time() - end)
+    pbar = tqdm(train_loader, desc='==> Train', position=1)
+    for (images, targets) in pbar:
+        images = images.to(device).float()
+        targets = targets.to(device)
+        images = images.float()
 
-        images, targets = convert_batch_to_tensor(batch, device=device)
+        cls_loss, reg_loss = model([images, targets])
+        print(cls_loss, reg_loss)
+        cls_loss = cls_loss.mean()
+        reg_loss = reg_loss.mean()
+        loss = cls_loss + reg_loss
+        if bool(loss == 0):
+            print('loss equal zero(0)')
+            continue
 
-        # compute output
-        with torch.autograd.set_detect_anomaly(mode=args.anomaly):
-
-            # https://github.com/pytorch/vision/blob/master/references/detection/engine.py#L30
-
-            loss_dict = model(images, targets)
-            # print(batch_idx, loss_dict)
-            loss = compute_total_loss(loss_dict)
-
-            # # reduce losses over all GPUs for logging purposes
-            # loss_dict_reduced = utils.reduce_dict(loss_dict)
-            # losses_reduced = sum(loss for loss in loss_dict_reduced.values())
-
-            # record loss
-            # losses.update(losses_reduced.item())
-            losses.update(loss.item())
-
-            # compute gradient and do SGD and lr step
+        loss.backward()
+        total_loss.append(loss.item())
+        mean_loss = np.mean(total_loss)
+        if (idx + 1) % args.grad_accum_steps == 0:
+            clip_grad_norm_(model.parameters(), args.max_grad_norm)
+            # zero grad first since first step requires zero grad beforehand
             optimizer.zero_grad()
-            loss.backward()
             optimizer.step()
 
-        # measure elapsed time
-        batch_time.update(time.time() - end)
-        end = time.time()
+        iter_step(epoch, mean_loss, cls_loss, reg_loss, scheduler, args)
+        pbar.update()
+        pbar.set_postfix({
+            'Cls_loss': cls_loss.item(),
+            'Reg_loss': reg_loss.item(),
+            'Mean_loss': mean_loss,
+            })
 
-        if batch_idx % args.print_freq == 0:
-            progress.display(batch_idx)
-            writer.add_scalar('batch loss (train)', loss, running_batch)
-            running_batch += 1
+    # end of training epoch
+    scheduler.step(mean_loss)
+    result = {'time': time.time()-start, 'loss': mean_loss}
+    for key, value in result.items():
+        print('    {:15s}: {}'.format(str(key), value))
 
-    return running_batch
-
-
-def validate(val_loader, model, device, args):
-    batch_time = AverageMeter('Time', ':6.3f')
-    losses = AverageMeter('Loss', ':.4e')
-    progress = ProgressMeter(
-        len(val_loader),
-        [batch_time, losses],
-        prefix='Validate: ')
-
-    # switch to evaluate mode
-    # model.eval()
-
-    with torch.no_grad():
-        end = time.time()
-        for batch_idx, batch in enumerate(val_loader):
-            images, targets = convert_batch_to_tensor(batch, device=device)
-
-            # compute output
-            loss_dict = model(images, targets)
-            loss = compute_total_loss(loss_dict)
-
-            # record loss
-            losses.update(loss.item())
-
-            # measure elapsed time
-            batch_time.update(time.time() - end)
-            end = time.time()
-
-            if batch_idx % args.print_freq == 0:
-                progress.display(batch_idx)
-
-    return losses.avg
+    return mean_loss
 
 
-def compute_total_loss(loss_dict):
-    """
-    Mean of all losses in dict returned by torchvision Faster RCNN
-    Torchvision returns losses with gradient fn included
-    Use mean() over sum()
-    """
-    total_loss = sum(loss for loss in loss_dict.values())
-    total_loss /= len(loss_dict)
-    return total_loss
-
-
-def get_transform(train=False):
-    """Returns transform"""
-    return AugTransform(train)
-
-
-def save_checkpoint(state, is_best, rand_model, args, ending='checkpoint.pt'):
-    filename = '{}_{}_{}'.format(rand_model, args.arch, ending)
-    torch.save(state, filename)
-    if is_best:
-        shutil.copyfile(filename, '{}_{}_best.pt'.format(rand_model, args.arch))
-
-
-class AverageMeter(object):
-    """Computes and stores the average and current value"""
-    def __init__(self, name, fmt=':f'):
-        self.name = name
-        self.fmt = fmt
-        self.reset()
-
-    def reset(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
-
-    def __str__(self):
-        fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
-        return fmtstr.format(**self.__dict__)
-
-
-class ProgressMeter(object):
-    def __init__(self, num_batches, meters, prefix=""):
-        self.batch_fmtstr = self._get_batch_fmtstr(num_batches)
-        self.meters = meters
-        self.prefix = prefix
-
-    def display(self, batch):
-        entries = [self.prefix + self.batch_fmtstr.format(batch)]
-        entries += [str(meter) for meter in self.meters]
-        print('\t'.join(entries))
-
-    def _get_batch_fmtstr(self, num_batches):
-        num_digits = len(str(num_batches // 1))
-        fmt = '{:' + str(num_digits) + 'd}'
-        return '[' + fmt + '/' + fmt.format(num_batches) + ']'
-
-
-def collate_fn(batch):
-    """
-    Reorders a batch for forward
-
-    https://discuss.pytorch.org/t/making-custom-image-to-image-dataset-using-collate-fn-and-dataloader/55951/2
-    default collate: https://github.com/pytorch/pytorch/blob/master/torch/utils/data/_utils/collate.py#L42
-
-    Arguments:
-        batch: List[
-            Tuple(
-                image (List[N, img_size])
-                target (Dict)
-            ), ..., batch_size
-        ]
-
-    type: (...) -> List[Tuple[image, target], ..., batch_size]
-    """
-    # filter out batch item with empty target
-    batch = [item for item in batch if item[1]['boxes'].size()[0] > 0]
-    # reorder items
-    image = [item[0] for item in batch]
-    target = [item[1] for item in batch]
-    return [image, target]
-
-    """reference: vision/references/detection/utils.py"""
-    # return tuple(zip(*batch))
-
-
-def convert_batch_to_tensor(batch, device):
-    """Convert a batch (list) of images and targets to tensor CPU/GPU
-    reference: https://github.com/pytorch/vision/blob/master/references/detection/engine.py#L27
-    L27: images = list(image.to(device) for image in images)
-    L28: targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
-
-    default collate: https://github.com/pytorch/pytorch/blob/master/torch/utils/data/_utils/collate.py#L42
-    """
-    batch_images, batch_targets = batch
-
-    # concat list of image tensors into a tensor at dim 0
-    # batch_images = torch.cat(batch_images, dim=0)
-
-    images = list(image.to(device) for image in batch_images)
-    targets = [{k: v.to(device) for k, v in t.items()} for t in batch_targets]
-
-    return images, targets
+def validate(model, val_loader, optimizer, epoch, device, args):
+    model.eval()
+    model.is_training = False
+    # with torch.no_grad():
+    #     evaluate(dataset, model)
 
 
 if __name__ == '__main__':
-    main()
+    args = parser.parse_args()
+
+    dump_dir = os.path.abspath(args.dump_dir)
+    annot_dir = os.path.abspath(args.annot_dir)
+    img_dir = os.path.abspath(args.img_dir)
+    ckpt_save_dir = os.path.join(dump_dir, 'checkpoints')
+    log_dir = os.path.join(dump_dir, 'logs')
+
+    if args.state_dict_dir is not None:
+        args.state_dict_dir = os.path.abspath(args.state_dict_dir)
+
+    for dir in [ckpt_save_dir, log_dir]:
+        if not os.path.isdir(dir):
+            os.makedirs(dir, exist_ok=True)
+
+    args.tensorboard = SummaryWriter(log_dir=log_dir)
+
+    is_cuda = torch.cuda.is_available()
+    device = torch.device('cuda' if is_cuda else 'cpu')
+
+    if args.seed is not None:
+        random.seed(args.seed)
+        torch.manual_seed(args.seed)
+        if is_cuda:
+            cudnn.deterministic = True
+            torch.cuda.manual_seed(args.seed)
+
+    dataset = BeeDataset(annot_dir=annot_dir, img_dir=img_dir)
+
+    train_prop = 0.8
+    train_size = math.ceil(train_prop * len(dataset))
+    val_size = len(dataset) - train_size
+
+    train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+
+    # wrap dataset with transform wrapper
+    train_dataset = TransformDataset(dataset=train_dataset,
+                                     transform=AugTransform(train=True, size=(1280, 1280)))
+    val_dataset = TransformDataset(dataset=val_dataset,
+                                   transform=AugTransform(train=False, size=(1280, 1280)))
+
+    kwargs = {'num_workers': args.workers, 'pin_memory': True} if is_cuda else {}
+    kwargs['shuffle'] = True
+    kwargs['collate_fn'] = collater
+
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, **kwargs)
+    val_loader = DataLoader(val_dataset, batch_size=1, **kwargs)
+
+    network = 'efficientdet-d5'
+    config = {'input_size': 1280, 'backbone': 'B5', 'W_bifpn': 288,
+              'D_bifpn': 7, 'D_class': 4}
+
+    model = EfficientDet(num_classes=args.num_class, network=network,
+                         local_state_dict=args.state_dict_dir,
+                         W_bifpn=config['W_bifpn'], D_bifpn=config['D_bifpn'],
+                         D_class=config['D_class'])
+    model.to(device)
+
+    optimizer = O.AdamW(model.parameters(), lr=args.lr,
+                        eps=args.eps, betas=(args.beta1, args.beta2))
+    scheduler = O.lr_scheduler.ReduceLROnPlateau(
+        optimizer, patience=args.patience, verbose=True)
+
+    iter = 0
+    best_loss = 1000
+    pbar = tqdm(range(args.n_epoch), desc='==> Epoch', position=0)
+
+    if args.resume is not None:
+        if os.path.isfile(args.resume):
+            print(f'... Loading checkpoint from {args.resume}')
+            ckpt = torch.load(args.resume)
+            args.start_epoch = ckpt['epoch']
+            pbar = tqdm(range(args.n_epoch+args.start_epoch), desc='==> Epoch')
+            iter = ckpt['iter']
+            loss = ckpt['last_loss']
+            best_loss = ckpt['best_loss']
+            model.load_state_dict(ckpt['state_dict'])
+            optimizer.load_state_dict(ckpt['optimizer_state_dict'])
+        else:
+            print("=> no checkpoint found at '{}'".format(args.resume))
+
+    for epoch in pbar:
+        loss = train(model, train_loader, scheduler, optimizer, epoch, device, args)
+
+        # validate(model, val_loader, optimizer, epoch, device, args)
+
+        if loss < best_loss:
+            best_loss = loss
+
+        state = {
+            'epoch': epoch,
+            'iter': iter,
+            'args': args,
+            'loss': loss,
+            'best_loss': best_loss,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+        }
+        torch.save(state, os.path.join(ckpt_save_dir, f'checkpoint_{epoch}.pt'))

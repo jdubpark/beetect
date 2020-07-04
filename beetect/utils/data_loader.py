@@ -2,23 +2,19 @@ import glob
 import os
 import random
 import string
-import xml.etree.ElementTree as ET
+import xml.etree.cElementTree as ET
 from PIL import Image
 
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
 
-from beetect.utils import Map
 
+class BeeDataset(Dataset):
+    """ Bee dataset annotated in CVAT video format
+    """
 
-__all__ = ['BeeDatasetVid']
-
-
-class BeeDatasetVid(Dataset):
-    """Bee dataset pulled from yt videos"""
-
-    def __init__(self, annot_dir, img_dir, transform=None, ext='jpg'):
+    def __init__(self, annot_dir, img_dir, ext='jpg'):
         """
         Args:
             annot_dir (string): Root dir of annotation file
@@ -51,7 +47,6 @@ class BeeDatasetVid(Dataset):
         # if is_empty is False:
         #     print('Not empty at all')
 
-        self.transform = transform
         self.ext = '.' + ext
 
     def __len__(self):
@@ -69,7 +64,6 @@ class BeeDatasetVid(Dataset):
                 image_id (Int64[1]): unique for all images
             }
         """
-
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
@@ -86,13 +80,10 @@ class BeeDatasetVid(Dataset):
         labels = torch.ones((num_boxes,), dtype=torch.int64)
         image_id = torch.tensor([idx], dtype=torch.int64)
 
-        target = Map({})
-        target.boxes = boxes # later changed to tensor
-        target.labels = labels
-        target.image_id = image_id
-
-        if self.transform:
-            image, target = self.transform(image, target)
+        target = {}
+        target['boxes'] = boxes # later changed to tensor
+        target['labels'] = labels
+        target['image_id'] = image_id
 
         return image, target
 
@@ -131,8 +122,8 @@ class BeeDatasetVid(Dataset):
                 # bbox position top left, bottom right
                 bbox = [attr['xtl'], attr['ytl'], attr['xbr'], attr['ybr']]
                 bbox = [float(n) for n in bbox] # string to float
-                if len(bbox) is False:
-                    print(pframe, bbox)
+                # if len(bbox) is False:
+                #     print(pframe, bbox)
 
                 # set up frame obj in frames
                 if pframe not in annot_frames:
@@ -146,3 +137,25 @@ class BeeDatasetVid(Dataset):
         # print('=' * 20)
 
         return annot_frames, rand_prefix
+
+
+class TransformDataset(Dataset):
+    """ Wrapper around Dataset to apply transform if needed
+    """
+    def __init__(self, dataset, transform):
+        super().__init__()
+        self.dataset = dataset
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+
+        image, target = self.dataset[idx] # dataset has __getitem__
+        image, target = self.transform(image, target)
+        # Alternatively remove the alpha channel from the tensor (for RGB)
+        # image = image[:3]
+        return image, target
