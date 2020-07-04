@@ -170,10 +170,11 @@ if __name__ == '__main__':
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
     # wrap dataset with transform wrapper
+    input_size = (896, 896)
     train_dataset = TransformDataset(dataset=train_dataset,
-                                     transform=AugTransform(train=True, size=(1280, 1280)))
+                                     transform=AugTransform(train=True, size=input_size))
     val_dataset = TransformDataset(dataset=val_dataset,
-                                   transform=AugTransform(train=False, size=(1280, 1280)))
+                                   transform=AugTransform(train=False, size=input_size))
 
     kwargs = {'num_workers': args.workers, 'pin_memory': True} if is_cuda else {}
     kwargs['shuffle'] = True
@@ -182,9 +183,12 @@ if __name__ == '__main__':
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, **kwargs)
     val_loader = DataLoader(val_dataset, batch_size=1, **kwargs)
 
-    network = 'efficientdet-d5'
-    config = {'input_size': 1280, 'backbone': 'B5', 'W_bifpn': 288,
-              'D_bifpn': 7, 'D_class': 4}
+    network = 'efficientdet-d3'
+    config = {'input_size': 896, 'backbone': 'B3', 'W_bifpn': 160,
+              'D_bifpn': 5, 'D_class': 4}
+    # network = 'efficientdet-d5'
+    # config = {'input_size': 1280, 'backbone': 'B5', 'W_bifpn': 288,
+    #           'D_bifpn': 7, 'D_class': 4}
 
     model = EfficientDet(num_classes=args.num_class, network=network,
                          local_state_dict=args.state_dict_dir,
