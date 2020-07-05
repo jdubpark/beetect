@@ -117,19 +117,21 @@ class RetinaHead(nn.Module):
 
         cls_score = self.retina_cls(cls_feat)
         cls_score = self.output_act(cls_score)
+        # print(cls_score.size())
         # out is B x C x W x H, with C = n_classes + n_anchors
-        print(cls_score.size())
         cls_score = cls_score.permute(0, 2, 3, 1)
         batch_size, width, height, channels = cls_score.shape
         cls_score = cls_score.view(
             batch_size, width, height, self.num_anchors, self.num_classes)
-        print('...', cls_score.size())
+        # print('...', cls_score.size())
+        # final cls score: B x A x C, with A = anchors, C = n_classes
         cls_score = cls_score.contiguous().view(x.size(0), -1, self.num_classes)
-        print('... ...', cls_score.size())
+        # print('... ...', cls_score.size())
 
         bbox_pred = self.retina_reg(reg_feat)
         bbox_pred = bbox_pred.permute(0, 2, 3, 1)
         bbox_pred = bbox_pred.contiguous().view(bbox_pred.size(0), -1, 4)
+        print(cls_score.size(), bbox_pred.size())
         return cls_score, bbox_pred
 
     def forward(self, feats):
