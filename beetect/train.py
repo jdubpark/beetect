@@ -259,4 +259,4 @@ if __name__ == '__main__':
             'optimizer_state_dict': optimizer.state_dict(),
         }
         save_path = os.path.join(ckpt_save_dir, 'checkpoint_{}.pt'.format(epoch))
-        torch.save(state, save_path, pickle_module=pickle)
+        torch.save(state, save_path)
