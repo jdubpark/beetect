@@ -113,15 +113,19 @@ class RetinaHead(nn.Module):
             cls_feat = cls_conv(cls_feat)
         for reg_conv in self.reg_convs:
             reg_feat = reg_conv(reg_feat)
+        # print(cls_feat.size(), reg_feat.size())
 
         cls_score = self.retina_cls(cls_feat)
         cls_score = self.output_act(cls_score)
         # out is B x C x W x H, with C = n_classes + n_anchors
+        print(cls_score.size())
         cls_score = cls_score.permute(0, 2, 3, 1)
         batch_size, width, height, channels = cls_score.shape
         cls_score = cls_score.view(
             batch_size, width, height, self.num_anchors, self.num_classes)
+        print('...', cls_score.size())
         cls_score = cls_score.contiguous().view(x.size(0), -1, self.num_classes)
+        print('... ...', cls_score.size())
 
         bbox_pred = self.retina_reg(reg_feat)
         bbox_pred = bbox_pred.permute(0, 2, 3, 1)
