@@ -16,8 +16,8 @@ try:
 except ImportError:
     from tensorboardX import SummaryWriter
 
-from model.efficientdet import EfficientDet
-from utils import collater, convert_batch_to_tensor, BeeDataset, TransformDataset, AugTransform
+from beetect.model import FocalLoss, EfficientDetBackbone
+from beetect.utils import collater, convert_batch_to_tensor, BeeDataset, TransformDataset, AugTransform
 
 """
 Train with single GPU. For distributed training,
@@ -25,6 +25,10 @@ use dist-train.py, which requires mpi and horovod
 """
 
 parser = argparse.ArgumentParser(description='Beetect Training')
+
+# model
+parser.add_argument('--compound_coef', '-C', type=int, default=3,
+                    help='Coefficient of efficientdet [0 to 7]')
 
 # dirs
 parser.add_argument('--dump_dir', '-O', type=str)
@@ -42,7 +46,7 @@ parser.add_argument('--grad_accum_steps', type=int, default=1,
 parser.add_argument('--max_grad_norm', type=float, default=0.1)
 
 # hyperparams
-parser.add_argument('--learning_rate', '-lr', dest='lr', type=float, default=0.01)
+parser.add_argument('--learning_rate', '-lr', dest='lr', type=float, default=1e-2)
 parser.add_argument('--weight_decay', '-wd', dest='wd', type=float, default=5e-5)
 parser.add_argument('--eps', default=1e-6, type=float)
 parser.add_argument('--beta1', default=0.9, type=float)
@@ -60,20 +64,26 @@ parser.add_argument('--log_interval', type=int, default=300, help='Log interval 
 
 iter = 0
 
+# shallow
+class Map(dict):
+    __getattr__ = dict.get
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__
 
-def iter_step(epoch, mean_loss, cls_loss, reg_loss, scheduler, args):
+
+def iter_step(epoch, mean_loss, cls_loss, reg_loss, optimizer, params, args):
     global iter
     iter += 1
-    tensorboard = args.tensorboard
+    tensorboard = params.tensorboard
 
     if iter % args.log_interval:
         tensorboard.add_scalar(tag='loss/cls_loss', scalar_value=cls_loss.item(), global_step=iter)
         tensorboard.add_scalar(tag='loss/reg_loss', scalar_value=reg_loss.item(), global_step=iter)
         tensorboard.add_scalar(tag='loss/total_loss', scalar_value=mean_loss, global_step=iter)
-        #tensorboard.add_scalar(tag='lr/lr', scalar_value=scheduler.get_last_lr()[-1], global_step=iter)
+        tensorboard.add_scalar(tag='lr/lr', scalar_value=optimizer.param_groups[0]['lr'], global_step=iter)
 
 
-def train(model, train_loader, scheduler, optimizer, epoch, device, args):
+def train(model, train_loader, criterion, scheduler, optimizer, epoch, device, params, args):
     start = time.time()
     total_loss = []
 
@@ -88,12 +98,14 @@ def train(model, train_loader, scheduler, optimizer, epoch, device, args):
         targets = targets.to(device)
         images = images.float()
 
-        cls_loss, reg_loss = model([images, targets])
+        _, regression, classification, anchors = model(images)
+        cls_loss, reg_loss = criterion(classification, regression, anchors, targets)
+
         # print(cls_loss, reg_loss)
         cls_loss = cls_loss.mean()
         reg_loss = reg_loss.mean()
         loss = cls_loss + reg_loss
-        if bool(loss == 0):
+        if loss == 0 or not torch.isfinite(loss):
             print('loss equal zero(0)')
             continue
 
@@ -106,7 +118,7 @@ def train(model, train_loader, scheduler, optimizer, epoch, device, args):
             optimizer.zero_grad()
             optimizer.step()
 
-        iter_step(epoch, mean_loss, cls_loss, reg_loss, scheduler, args)
+        iter_step(epoch, mean_loss, cls_loss, reg_loss, optimizer, params, args)
         idx += 1
         pbar.update()
         pbar.set_postfix({
@@ -124,7 +136,7 @@ def train(model, train_loader, scheduler, optimizer, epoch, device, args):
     return mean_loss
 
 
-def validate(model, val_loader, optimizer, epoch, device, args):
+def validate(model, val_loader, optimizer, epoch, device, params, args):
     model.eval()
     model.is_training = False
     # with torch.no_grad():
@@ -133,6 +145,7 @@ def validate(model, val_loader, optimizer, epoch, device, args):
 
 if __name__ == '__main__':
     args = parser.parse_args()
+    params = Map({})
 
     dump_dir = os.path.abspath(args.dump_dir)
     annot_dir = os.path.abspath(args.annot_dir)
@@ -147,7 +160,9 @@ if __name__ == '__main__':
         if not os.path.isdir(dir):
             os.makedirs(dir, exist_ok=True)
 
-    args.tensorboard = SummaryWriter(log_dir=log_dir)
+    # don't pass it as args since it can't be serialized
+    # https://discuss.pytorch.org/t/how-to-debug-saving-model-typeerror-cant-pickle-swigpyobject-objects/66304
+    params.tensorboard = SummaryWriter(log_dir=log_dir)
 
     torch.cuda.empty_cache()
 
@@ -190,19 +205,24 @@ if __name__ == '__main__':
     # config = {'input_size': 1280, 'backbone': 'B5', 'W_bifpn': 288,
     #           'D_bifpn': 7, 'D_class': 4}
 
-    model = EfficientDet(num_classes=args.num_class, network=network,
-                         local_state_dict=args.state_dict_dir,
-                         W_bifpn=config['W_bifpn'], D_bifpn=config['D_bifpn'],
-                         D_class=config['D_class'])
+    model = EfficientDetBackbone(num_classes=args.num_class,
+                                 compound_coef=args.compound_coef)
+
+    # model = EfficientDet(num_classes=args.num_class, network=network,
+    #                      weights_path=args.state_dict_dir,
+    #                      W_bifpn=config['W_bifpn'], D_bifpn=config['D_bifpn'],
+    #                      D_class=config['D_class'])
     model.to(device)
 
+    criterion = FocalLoss()
     optimizer = O.AdamW(model.parameters(), lr=args.lr,
                         eps=args.eps, betas=(args.beta1, args.beta2))
     scheduler = O.lr_scheduler.ReduceLROnPlateau(
         optimizer, patience=args.patience, verbose=True)
 
     iter = 0
-    best_loss = 1000
+    best_loss = 1e5
+    best_epoch = 0
     pbar = tqdm(range(args.n_epoch), desc='==> Epoch', position=0)
 
     if args.resume is not None:
@@ -220,12 +240,13 @@ if __name__ == '__main__':
             print("=> no checkpoint found at '{}'".format(args.resume))
 
     for epoch in pbar:
-        loss = train(model, train_loader, scheduler, optimizer, epoch, device, args)
+        loss = train(model, train_loader, criterion, scheduler, optimizer, epoch, device, params, args)
 
-        # validate(model, val_loader, optimizer, epoch, device, args)
+        # validate(model, val_loader, criterion, optimizer, epoch, device, params, args)
 
         if loss < best_loss:
             best_loss = loss
+            best_epoch = epoch
 
         state = {
             'epoch': epoch,
@@ -233,7 +254,9 @@ if __name__ == '__main__':
             'args': args,
             'loss': loss,
             'best_loss': best_loss,
+            'best_epoch': best_epoch,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
         }
-        torch.save(state, os.path.join(ckpt_save_dir, f'checkpoint_{epoch}.pt'))
+        save_path = os.path.join(ckpt_save_dir, 'checkpoint_{}.pt'.format(epoch))
+        torch.save(state, save_path)
