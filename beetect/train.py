@@ -64,11 +64,17 @@ parser.add_argument('--log_interval', type=int, default=300, help='Log interval 
 
 iter = 0
 
+# shallow
+class Map(dict):
+    __getattr__ = dict.get
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__
 
-def iter_step(epoch, mean_loss, cls_loss, reg_loss, optimizer, args):
+
+def iter_step(epoch, mean_loss, cls_loss, reg_loss, optimizer, params, args):
     global iter
     iter += 1
-    tensorboard = args.tensorboard
+    tensorboard = params.tensorboard
 
     if iter % args.log_interval:
         tensorboard.add_scalar(tag='loss/cls_loss', scalar_value=cls_loss.item(), global_step=iter)
@@ -77,7 +83,7 @@ def iter_step(epoch, mean_loss, cls_loss, reg_loss, optimizer, args):
         tensorboard.add_scalar(tag='lr/lr', scalar_value=optimizer.param_groups[0]['lr'], global_step=iter)
 
 
-def train(model, train_loader, criterion, scheduler, optimizer, epoch, device, args):
+def train(model, train_loader, criterion, scheduler, optimizer, epoch, device, params, args):
     start = time.time()
     total_loss = []
 
@@ -112,7 +118,7 @@ def train(model, train_loader, criterion, scheduler, optimizer, epoch, device, a
             optimizer.zero_grad()
             optimizer.step()
 
-        iter_step(epoch, mean_loss, cls_loss, reg_loss, optimizer, args)
+        iter_step(epoch, mean_loss, cls_loss, reg_loss, optimizer, params, args)
         idx += 1
         pbar.update()
         pbar.set_postfix({
@@ -130,7 +136,7 @@ def train(model, train_loader, criterion, scheduler, optimizer, epoch, device, a
     return mean_loss
 
 
-def validate(model, val_loader, optimizer, epoch, device, args):
+def validate(model, val_loader, optimizer, epoch, device, params, args):
     model.eval()
     model.is_training = False
     # with torch.no_grad():
@@ -139,6 +145,7 @@ def validate(model, val_loader, optimizer, epoch, device, args):
 
 if __name__ == '__main__':
     args = parser.parse_args()
+    params = Map({})
 
     dump_dir = os.path.abspath(args.dump_dir)
     annot_dir = os.path.abspath(args.annot_dir)
@@ -153,7 +160,9 @@ if __name__ == '__main__':
         if not os.path.isdir(dir):
             os.makedirs(dir, exist_ok=True)
 
-    args.tensorboard = SummaryWriter(log_dir=log_dir)
+    # don't pass it as args since it can't be serialized
+    # https://discuss.pytorch.org/t/how-to-debug-saving-model-typeerror-cant-pickle-swigpyobject-objects/66304
+    params.tensorboard = SummaryWriter(log_dir=log_dir)
 
     torch.cuda.empty_cache()
 
@@ -231,9 +240,9 @@ if __name__ == '__main__':
             print("=> no checkpoint found at '{}'".format(args.resume))
 
     for epoch in pbar:
-        loss = train(model, train_loader, criterion, scheduler, optimizer, epoch, device, args)
+        loss = train(model, train_loader, criterion, scheduler, optimizer, epoch, device, params, args)
 
-        # validate(model, val_loader, optimizer, epoch, device, args)
+        # validate(model, val_loader, criterion, optimizer, epoch, device, params, args)
 
         if loss < best_loss:
             best_loss = loss
@@ -243,10 +252,11 @@ if __name__ == '__main__':
             'epoch': epoch,
             'iter': iter,
             'args': args,
-            # 'loss': loss,
-            # 'best_loss': best_loss,
-            # 'best_epoch': best_epoch,
+            'loss': loss,
+            'best_loss': best_loss,
+            'best_epoch': best_epoch,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
         }
-        torch.save(state, os.path.join(ckpt_save_dir, 'checkpoint_{}.pt'.format(epoch)))
+        save_path = os.path.join(ckpt_save_dir, 'checkpoint_{}.pt'.format(epoch))
+        torch.save(state, save_path, pickle_module=pickle)
