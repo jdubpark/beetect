@@ -131,7 +131,6 @@ class RetinaHead(nn.Module):
         bbox_pred = self.retina_reg(reg_feat)
         bbox_pred = bbox_pred.permute(0, 2, 3, 1)
         bbox_pred = bbox_pred.contiguous().view(bbox_pred.size(0), -1, 4)
-        print(cls_score.size(), bbox_pred.size())
         return cls_score, bbox_pred
 
     def forward(self, feats):

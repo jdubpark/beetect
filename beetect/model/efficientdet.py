@@ -68,8 +68,8 @@ class EfficientDet(nn.Module):
         outs = self.bbox_head(x)
         classification = torch.cat([out for out in outs[0]], dim=1)
         regression = torch.cat([out for out in outs[1]], dim=1)
-        # print(classification.size())
-        # print(regression.size())
+        print('...', classification.size())
+        print('...', regression.size())
         anchors = self.anchors(inputs)
         if self.is_training:
             return self.criterion(classification, regression, anchors, annotations)
