@@ -243,10 +243,10 @@ if __name__ == '__main__':
             'epoch': epoch,
             'iter': iter,
             'args': args,
-            'loss': loss,
-            'best_loss': best_loss,
-            'best_epoch': best_epoch,
+            # 'loss': loss,
+            # 'best_loss': best_loss,
+            # 'best_epoch': best_epoch,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
         }
-        torch.save(state, os.path.join(ckpt_save_dir, f'checkpoint_{epoch}.pt'))
+        torch.save(state, os.path.join(ckpt_save_dir, 'checkpoint_{}.pt'.format(epoch)))
