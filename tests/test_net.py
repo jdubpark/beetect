@@ -4,54 +4,15 @@ import os
 
 import numpy as np
 import torch
-from beetect.scratchv1 import resnet50_fpn
 from torch import nn
 
+from beetect.scratchv1 import resnet50_fpn
 
 parser = argparse.ArgumentParser(description='PyTorch ScratchV1 Training')
 parser.add_argument('-c', '--checkpoint', default='', dest='checkpoint',
                     help='checkpoint file path')
 parser.add_argument('--params', action='store_true', help='Show model parameters')
 parser.add_argument('--weights', action='store_true', help='Show model weights')
-
-
-def main():
-    args = parser.parse_args()
-
-    model = resnet50_fpn()
-
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-    print(model)
-
-    if args.params:
-        params = model.parameters()
-        print('Params to learn:')
-        for name, param in model.named_parameters():
-            if param.requires_grad == True:
-                print('\t', name)
-            else:
-                print('\t NOT -- ', name)
-        # print(list(params))
-
-    if args.checkpoint:
-        if os.path.exists(args.checkpoint) is False:
-            raise ValueError('Invalid path: checkpoint')
-
-        checkpoint = torch.load(args.checkpoint, map_location=device)
-        model.load_state_dict(checkpoint['state_dict'])
-        arch = checkpoint['arch']
-        epoch = checkpoint['epoch']
-        loss = checkpoint['loss']
-        args = checkpoint['args']
-
-        print('=' * 10)
-        print(arch, epoch, loss)
-        print(args)
-        print('=' * 10)
-
-    if args.weights:
-        analyze_weights(model)
 
 
 def analyze_weights(model):
@@ -205,4 +166,39 @@ def plot_filters_multi_channel(t, max_show, num_cols=6):
 
 
 if __name__ == '__main__':
-    main()
+    args = parser.parse_args()
+
+    model = resnet50_fpn()
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    print(model)
+
+    if args.params:
+        params = model.parameters()
+        print('Params to learn:')
+        for name, param in model.named_parameters():
+            if param.requires_grad == True:
+                print('\t', name)
+            else:
+                print('\t NOT -- ', name)
+        # print(list(params))
+
+    if args.checkpoint:
+        if os.path.exists(args.checkpoint) is False:
+            raise ValueError('Invalid path: checkpoint')
+
+        checkpoint = torch.load(args.checkpoint, map_location=device)
+        model.load_state_dict(checkpoint['state_dict'])
+        arch = checkpoint['arch']
+        epoch = checkpoint['epoch']
+        loss = checkpoint['loss']
+        args = checkpoint['args']
+
+        print('=' * 10)
+        print(arch, epoch, loss)
+        print(args)
+        print('=' * 10)
+
+    if args.weights:
+        analyze_weights(model)
