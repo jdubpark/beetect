@@ -12,9 +12,9 @@ parser = argparse.ArgumentParser(description='EfficientDet Sample Test')
 
 parser.add_argument('--checkpoint', '-c', default='ckpt', type=str,
                     help='Checkpoint directory')
-parser.add_argument('--image', '-img', type=str,
+parser.add_argument('--image', '-i', dest='img', type=str,
                     help='Path to image file (mutually exclusive to video)')
-parser.add_argument('--video', '-vid', type=str,
+parser.add_argument('--video', '-v', dest='vid', type=str,
                     help='Path to video file (mutually exclusive to image)')
 parser.add_argument('--iou', type=float, default=0.2,
                     help='IoU threshold (default 0.2)')
