@@ -23,9 +23,9 @@ parser.add_argument('--iou', type=float, default=0.2,
 if __name__ == '__main__':
     args = parser.parse_args()
 
-    if args.img is not None and args.video is not None:
+    if args.img is not None and args.vid is not None:
         raise ValueError('Argument conflict: image and video are mutually exclusive')
-    if args.img is None and args.video is None:
+    if args.img is None and args.vid is None:
         raise ValueError('Argument conflict: either image or video is required')
     if args.img is not None and os.path.exists(args.img) is False:
         raise ValueError('Invalid path: image')
