@@ -2,9 +2,10 @@ import argparse
 import os
 import math
 import time
-import numpy as np
+import shutil
 from tqdm import tqdm
 
+import numpy as np
 import torch
 import torch.optim as O
 import torch.backends.cudnn as cudnn
@@ -16,7 +17,7 @@ try:
 except ImportError:
     from tensorboardX import SummaryWriter
 
-from beetect.model import FocalLoss, EfficientDetBackbone
+from beetect.model import FocalLoss, EfficientDet, BBoxTransform, ClipBoxes
 from beetect.utils import collater, convert_batch_to_tensor, BeeDataset, TransformDataset, AugTransform
 
 """
@@ -41,17 +42,19 @@ parser.add_argument('--state_dict_dir', '-S', type=str, help='Local state dict i
 parser.add_argument('--n_epoch', type=int, default=30)
 parser.add_argument('--batch_size', '-b', type=int, default=32)
 parser.add_argument('--num_class', type=int, default=2)
-parser.add_argument('--grad_accum_steps', type=int, default=1,
+parser.add_argument('--grad_accum_steps', type=int, default=2,
                     help='Gradient accumulation steps, used to increase batch size before optimizing to offset GPU memory constraint')
 parser.add_argument('--max_grad_norm', type=float, default=0.1)
 
 # hyperparams
-parser.add_argument('--learning_rate', '-lr', dest='lr', type=float, default=1e-2)
-parser.add_argument('--weight_decay', '-wd', dest='wd', type=float, default=5e-5)
+parser.add_argument('--lr', dest='lr', type=float, default=1e-2)
+parser.add_argument('--decay', dest='wd', type=float, default=5e-5)
 parser.add_argument('--eps', default=1e-6, type=float)
 parser.add_argument('--beta1', default=0.9, type=float)
 parser.add_argument('--beta2', default=0.999, type=float)
 parser.add_argument('--patience', default=3, type=int, help='Patience for ReduceLROnPlateau before changing LR value')
+parser.add_argument('--alpha', default=1., type=float,
+                    help='mixup interpolation coefficient (default: 1)')
 
 # other
 parser.add_argument('--seed', type=int)
@@ -60,6 +63,7 @@ parser.add_argument('--start_epoch', type=int, help='Start epoch, used for resum
 
 # interval
 parser.add_argument('--log_interval', type=int, default=300, help='Log interval per X iterations')
+parser.add_argument('--val_interval', type=int, default=1, help='Val interval per X epoch')
 
 
 iter = 0
@@ -83,6 +87,28 @@ def iter_step(epoch, mean_loss, cls_loss, reg_loss, optimizer, params, args):
         tensorboard.add_scalar(tag='lr/lr', scalar_value=optimizer.param_groups[0]['lr'], global_step=iter)
 
 
+def mixup_data(x, y, alpha=1.0, use_cuda=True):
+    '''Returns mixed inputs, pairs of targets, and lambda'''
+    if alpha > 0:
+        lam = np.random.beta(alpha, alpha)
+    else:
+        lam = 1
+
+    batch_size = x.size()[0]
+    if use_cuda:
+        index = torch.randperm(batch_size).cuda()
+    else:
+        index = torch.randperm(batch_size)
+
+    mixed_x = lam * x + (1 - lam) * x[index, :]
+    y_a, y_b = y, y[index]
+    return mixed_x, y_a, y_b, lam
+
+
+def mixup_criterion(criterion, pred, y_a, y_b, lam):
+    return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
+
+
 def train(model, train_loader, criterion, scheduler, optimizer, epoch, device, params, args):
     start = time.time()
     total_loss = []
@@ -95,10 +121,9 @@ def train(model, train_loader, criterion, scheduler, optimizer, epoch, device, p
     idx = 0
     for (images, targets) in pbar:
         images = images.to(device).float()
-        targets = targets.to(device)
-        images = images.float()
+        targets = targets.to(device).float()
 
-        _, regression, classification, anchors = model(images)
+        regression, classification, anchors = model(images)
         cls_loss, reg_loss = criterion(classification, regression, anchors, targets)
 
         # print(cls_loss, reg_loss)
@@ -126,6 +151,7 @@ def train(model, train_loader, criterion, scheduler, optimizer, epoch, device, p
             'Reg_loss': reg_loss.item(),
             'Mean_loss': mean_loss,
             })
+        # pbar.set_description()
 
     # end of training epoch
     scheduler.step(mean_loss)
@@ -143,6 +169,40 @@ def validate(model, val_loader, optimizer, epoch, device, params, args):
     #     evaluate(dataset, model)
 
 
+def train(model, test_loader, criterion, device, params, args):
+    model.eval()
+
+    pbar = tqdm(train_loader, desc='==> Train', position=1)
+    idx = 0
+
+    with torch.no_grad():
+        for (images, targets) in pbar:
+            images = images.to(device).float()
+            targets = targets.to(device)
+
+            regression, classification, anchors = model(images)
+
+            transformed_anchors = BBoxTransform(anchors, regression) # regress boxes
+            transformed_anchors = ClipBoxes(transformed_anchors, img_batch)
+
+            scores = torch.max(classification, dim=2, keepdim=True)[0]
+
+            scores_over_thresh = (scores > 0.05)[0, :, 0]
+
+            if scores_over_thresh.sum() == 0:
+                return [torch.zeros(0), torch.zeros(0), torch.zeros(0, 4)]
+
+            classification = classification[:, scores_over_thresh, :]
+            transformed_anchors = transformed_anchors[:, scores_over_thresh, :]
+            scores = scores[:, scores_over_thresh, :]
+
+            anchors_nms_idx = nms(torch.cat([transformed_anchors, scores], dim=2)[0, :, :], 0.5)
+
+            nms_scores, nms_class = classification[0, anchors_nms_idx, :].max(dim=1)
+
+            return [nms_scores, nms_class, transformed_anchors[0, anchors_nms_idx, :]]
+
+
 if __name__ == '__main__':
     args = parser.parse_args()
     params = Map({})
@@ -153,6 +213,9 @@ if __name__ == '__main__':
     ckpt_save_dir = os.path.join(dump_dir, 'checkpoints')
     log_dir = os.path.join(dump_dir, 'logs')
 
+    is_cuda = torch.cuda.is_available()
+    device = torch.device('cuda' if is_cuda else 'cpu')
+
     if args.state_dict_dir is not None:
         args.state_dict_dir = os.path.abspath(args.state_dict_dir)
 
@@ -160,21 +223,12 @@ if __name__ == '__main__':
         if not os.path.isdir(dir):
             os.makedirs(dir, exist_ok=True)
 
+    if is_cuda:
+        torch.cuda.empty_cache()
+
     # don't pass it as args since it can't be serialized
     # https://discuss.pytorch.org/t/how-to-debug-saving-model-typeerror-cant-pickle-swigpyobject-objects/66304
     params.tensorboard = SummaryWriter(log_dir=log_dir)
-
-    torch.cuda.empty_cache()
-
-    is_cuda = torch.cuda.is_available()
-    device = torch.device('cuda' if is_cuda else 'cpu')
-
-    if args.seed is not None:
-        random.seed(args.seed)
-        torch.manual_seed(args.seed)
-        if is_cuda:
-            cudnn.deterministic = True
-            torch.cuda.manual_seed(args.seed)
 
     dataset = BeeDataset(annot_dir=annot_dir, img_dir=img_dir)
 
@@ -185,7 +239,7 @@ if __name__ == '__main__':
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
     # wrap dataset with transform wrapper
-    input_size = (896, 896)
+    input_size = (896, 896) # smaller = memory efficient
     train_dataset = TransformDataset(dataset=train_dataset,
                                      transform=AugTransform(train=True, size=input_size))
     val_dataset = TransformDataset(dataset=val_dataset,
@@ -201,17 +255,9 @@ if __name__ == '__main__':
     network = 'efficientdet-d3'
     config = {'input_size': 896, 'backbone': 'B3', 'W_bifpn': 160,
               'D_bifpn': 5, 'D_class': 4}
-    # network = 'efficientdet-d5'
-    # config = {'input_size': 1280, 'backbone': 'B5', 'W_bifpn': 288,
-    #           'D_bifpn': 7, 'D_class': 4}
 
-    model = EfficientDetBackbone(num_classes=args.num_class,
+    model = EfficientDet(num_classes=args.num_class,
                                  compound_coef=args.compound_coef)
-
-    # model = EfficientDet(num_classes=args.num_class, network=network,
-    #                      weights_path=args.state_dict_dir,
-    #                      W_bifpn=config['W_bifpn'], D_bifpn=config['D_bifpn'],
-    #                      D_class=config['D_class'])
     model.to(device)
 
     criterion = FocalLoss()
@@ -220,7 +266,6 @@ if __name__ == '__main__':
     scheduler = O.lr_scheduler.ReduceLROnPlateau(
         optimizer, patience=args.patience, verbose=True)
 
-    iter = 0
     best_loss = 1e5
     best_epoch = 0
     pbar = tqdm(range(args.n_epoch), desc='==> Epoch', position=0)
@@ -244,19 +289,23 @@ if __name__ == '__main__':
 
         # validate(model, val_loader, criterion, optimizer, epoch, device, params, args)
 
+        is_best = False
         if loss < best_loss:
             best_loss = loss
             best_epoch = epoch
+            is_best = True
 
         state = {
             'epoch': epoch,
             'iter': iter,
             'args': args,
             'loss': loss,
-            'best_loss': best_loss,
-            'best_epoch': best_epoch,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
         }
         save_path = os.path.join(ckpt_save_dir, 'checkpoint_{}.pt'.format(epoch))
         torch.save(state, save_path)
+
+        if is_best:
+            best_path = os.path.join(ckpt_save_dir, 'best_ckpt.pt')
+            shutil.copy(save_path, best_path)

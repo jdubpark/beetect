@@ -8,4 +8,4 @@ checkpoints/
 runs*/
 config.txt
 logs/
-model-old/
+model-old*/

@@ -1,19 +1,34 @@
 import argparse
+import json
 import os
+from pycocotools.cocoeval import COCOeval
+from tqdm import tqdm
 
 import numpy as np
 import torch
+import torch.autograd.profiler as profiler
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from tqdm import tqdm
-from pycocotools.cocoeval import COCOeval
-import json
 
-from datasets import (Augmenter, CocoDataset, Normalizer,
-                      Resizer, VOCDetection, collater, detection_collate,
-                      get_augumentation)
+# from datasets import (Augmenter, CocoDataset, Normalizer,
+#                       Resizer, VOCDetection, collater, detection_collate,
+#                       get_augumentation)
 from model.efficientdet import EfficientDet
 from utils import EFFICIENTDET, get_state_dict
+
+
+parser = argparse.ArgumentParser(description='EfficientDet Eval')
+train_set = parser.add_mutually_exclusive_group()
+parser.add_argument('--dataset', default='VOC', choices=['VOC', 'COCO'],
+                    type=str, help='VOC or COCO')
+parser.add_argument('--dataset_root', default='/root/data/VOCdevkit/',
+                    help='Dataset root directory path [/root/data/VOCdevkit/, /root/data/coco/]')
+parser.add_argument('-t', '--threshold', default=0.4,
+                    type=float, help='Visualization threshold')
+parser.add_argument('-it', '--iou_threshold', default=0.5,
+                    type=float, help='Visualization threshold')
+parser.add_argument('--weight', default='./checkpoint_VOC_efficientdet-d0_248.pth', type=str,
+                    help='Checkpoint state_dict file to resume training from')
 
 
 def compute_overlap(a, b):
@@ -339,19 +354,6 @@ def evaluate_coco(dataset, model, threshold=0.05):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(
-        description='EfficientDet Training With Pytorch')
-    train_set = parser.add_mutually_exclusive_group()
-    parser.add_argument('--dataset', default='VOC', choices=['VOC', 'COCO'],
-                        type=str, help='VOC or COCO')
-    parser.add_argument('--dataset_root', default='/root/data/VOCdevkit/',
-                        help='Dataset root directory path [/root/data/VOCdevkit/, /root/data/coco/]')
-    parser.add_argument('-t', '--threshold', default=0.4,
-                        type=float, help='Visualization threshold')
-    parser.add_argument('-it', '--iou_threshold', default=0.5,
-                        type=float, help='Visualization threshold')
-    parser.add_argument('--weight', default='./checkpoint_VOC_efficientdet-d0_248.pth', type=str,
-                        help='Checkpoint state_dict file to resume training from')
     args = parser.parse_args()
 
     if(args.weight is not None):
