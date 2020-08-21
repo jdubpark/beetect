@@ -23,31 +23,20 @@ from albumentations.pytorch.transforms import ToTensor
 from torch.utils.data import Dataset, DataLoader
 
 
-def collater(data):
-    #print(data)
-    data = [item for item in data if item[1].size(0) > 0]
-    imgs = [item[0] for item in data]
-    boxes = [item[1] for item in data]
-    imgs = torch.from_numpy(np.stack(imgs, axis=0))
-    max_num_annots = max(annot.shape[0] for annot in boxes)
-
-    if max_num_annots > 0:
-        annot_padded = torch.ones((len(boxes), max_num_annots, 5)) * -1
-        for idx, annot in enumerate(boxes):
-            if annot.shape[0] > 0:
-                annot_padded[idx, :annot.shape[0], :] = annot
-    else:
-        annot_padded = torch.ones((len(boxes), 1, 5)) * -1
-
-    # imgs = imgs.permute(0, 3, 1, 2) # doesn't apply here
-    return (imgs, torch.FloatTensor(annot_padded))
+def collater(batch):
+    # filter out batch item with empty target
+    batch = [item for item in batch if item[1]['boxes'].size()[0] > 0]
+    # reorder items
+    image = [item[0] for item in batch]
+    target = [item[1] for item in batch]
+    return [image, target]
 
 
 def convert_batch_to_tensor(batch, device):
     batch_images, batch_targets = batch
-    images = list(image.to(device) for image in batch_images)
-    targets = list(target.to(device) for target in batch_targets)
-    # targets = [{k: v.to(device) for k, v in t.items()} for t in batch_targets]
+    images = list(image.to(device, dtype=torch.float32) for image in batch_images)
+    # targets = list(target.to(device) for target in batch_targets)
+    targets = [{k: v.to(device) for k, v in t.items()} for t in batch_targets]
     return images, targets
 
 
@@ -187,15 +176,7 @@ class TransformDataset(Dataset):
         image, target = self.dataset[idx] # dataset has __getitem__
         image, target = self.transform(image, target)
 
-        annots = torch.empty(0, 5)
-        for i in range(len(target['boxes'])):
-            # last is label id
-            annot = torch.zeros((1, 5))
-            annot[0, :4] = target['boxes'][i]
-            annot[0, 4] = target['labels'][i]
-            annots = torch.cat((annots, annot), dim=0)
-
-        return image, annots
+        return image, target
 
 
 class AugTransform:

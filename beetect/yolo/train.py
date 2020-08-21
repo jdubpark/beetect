@@ -97,10 +97,9 @@ def train(model, train_loader, criterion, scheduler, optimizer, epoch, params, a
 
     pbar = tqdm(train_loader, desc='==> Train', position=1)
     idx = 0
-    for (images, targets) in pbar:
-        images = images.to(args.device, dtype=torch.float32)
-        targets = targets.to(args.device)
-        print(targets[0], targets[0].size())
+    for batch in pbar:
+        images, targets = convert_batch_to_tensor(batch, args.device)
+        print(targets)
 
         #images, targets_a, targets_b, lam = mixup_data(images, targets,
         #                                              args.alpha, args.is_cuda)
