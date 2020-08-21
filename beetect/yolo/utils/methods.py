@@ -10,10 +10,9 @@ def mixup_data(x, y, alpha=1.0, use_cuda=True):
         lam = 1
 
     batch_size = x.size()[0]
+    index = torch.randperm(batch_size)
     if use_cuda:
-        index = torch.randperm(batch_size).cuda()
-    else:
-        index = torch.randperm(batch_size)
+        index = index.cuda()
 
     mixed_x = lam * x + (1 - lam) * x[index, :]
     y_a, y_b = y, y[index]
@@ -21,4 +20,5 @@ def mixup_data(x, y, alpha=1.0, use_cuda=True):
 
 
 def mixup_criterion(criterion, pred, y_a, y_b, lam):
+    print('mixup', len(pred), y_a.size(), y_b.size(), lam)
     return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)

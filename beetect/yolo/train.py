@@ -12,7 +12,6 @@ from tqdm import tqdm
 import numpy as np
 import torch
 import torch.optim as O
-import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import random_split, DataLoader
@@ -22,11 +21,12 @@ try:
 except ImportError:
     from tensorboardX import SummaryWriter
 
-from .model import Yolov4, Yolo_loss
-from .utils.setup import init_args
-from .utils.data import collater, convert_batch_to_tensor, BeeDataset, TransformDataset, AugTransform
-from .utils.scheduler import GradualWarmupScheduler
-from .utils.methods import mixup_data, mixup_criterion
+# don't prepend dot
+from model import Yolov4, Yolo_loss
+from utils.setup import init_args
+from utils.data import collater, convert_batch_to_tensor, BeeDataset, TransformDataset, AugTransform
+from utils.scheduler import GradualWarmupScheduler
+from utils.methods import mixup_data, mixup_criterion
 
 """
 Train with single GPU. For distributed training,
@@ -49,8 +49,8 @@ parser.add_argument('--num_class', type=int, default=2)
 parser.add_argument('--grad_accum_steps', type=int, default=2,
                     help='Gradient accumulation steps, used to increase batch size before optimizing to offset GPU memory constraint')
 parser.add_argument('--max_grad_norm', type=float, default=0.1)
-parser.add_argument('--img_h', type=int, default=800, help='Image size')
-parser.add_argument('--img_w', type=int, default=800, help='Image size')
+parser.add_argument('--img_h', type=int, default=608, help='Image size')
+parser.add_argument('--img_w', type=int, default=608, help='Image size')
 parser.add_argument('--iou_type', type=str, default='iou', help='iou type (iou, giou, diou, ciou)')
 
 # hyperparams
@@ -88,28 +88,28 @@ def iter_step(epoch, loss, mean_loss, optimizer, params, args):
         tensorboard.add_scalar(tag='lr/lr', scalar_value=optimizer.param_groups[0]['lr'], global_step=iter)
 
 
-def train(model, train_loader, criterion, scheduler, optimizer, epoch, device, params, args):
+def train(model, train_loader, criterion, scheduler, optimizer, epoch, params, args):
     start = time.time()
     total_loss = []
 
     model.train()
     model.is_training = True
-    model.freeze_bn()
 
     pbar = tqdm(train_loader, desc='==> Train', position=1)
     idx = 0
     for (images, targets) in pbar:
-        images = images.to(device).float()
-        targets = targets.to(device).float()
+        images = images.to(args.device).float()
+        targets = targets.to(args.device).float()
 
-        images, targets_a, targets_b, lam = mixup_data(images, targets,
-                                                       args.alpha, args.is_cuda)
-        images, targets_a, targets_b = map(Variable, (images, targets_a, targets_b))
+        #images, targets_a, targets_b, lam = mixup_data(images, targets,
+        #                                               args.alpha, args.is_cuda)
+        #images, targets_a, targets_b = map(Variable, (images, targets_a, targets_b))
 
         outputs = model(images)
-        print(outputs)
+        #print(f'{epoch}-{idx}', len(outputs))
 
-        loss = mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
+        #loss = mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
+        loss, loss_xy, loss_wh, loss_obj, loss_cls, loss_l2 = criterion(outputs, targets)
 
         loss = loss.mean()
         # total_loss += loss.data[0]
@@ -146,14 +146,14 @@ def train(model, train_loader, criterion, scheduler, optimizer, epoch, device, p
 
 
 @torch.no_grad()
-def validate(model, val_loader, optimizer, epoch, device, params, args):
+def validate(model, val_loader, optimizer, epoch, params, args):
     model.eval()
     model.is_training = False
     # evaluate(dataset, model)
 
 
 @torch.no_grad()
-def test(model, test_loader, criterion, device, params, args):
+def test(model, test_loader, criterion, params, args):
     model.eval()
 
     pbar = tqdm(train_loader, desc='==> Train', position=1)
@@ -164,7 +164,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     args, params = init_args(args)
 
-    dataset = BeeDataset(annot_dir=annot_dir, img_dir=img_dir)
+    dataset = BeeDataset(annot_dir=args.annot_dir, img_dir=args.img_dir)
 
     train_prop = 0.8
     train_size = math.ceil(train_prop * len(dataset))
@@ -206,7 +206,7 @@ if __name__ == '__main__':
     scheduler_plateau = O.lr_scheduler.ReduceLROnPlateau(
         optimizer, patience=args.patience, verbose=True)
     scheduler = GradualWarmupScheduler(
-        optim, multiplier=1, total_epoch=5, after_scheduler=scheduler_plateau)
+        optimizer, multiplier=1, total_epoch=5, after_scheduler=scheduler_plateau)
 
     best_loss = 1e5
     best_epoch = 0
@@ -230,9 +230,9 @@ if __name__ == '__main__':
     # optimizer.step()
 
     for epoch in pbar:
-        loss = train(model, train_loader, criterion, scheduler, optimizer, epoch, device, params, args)
+        loss = train(model, train_loader, criterion, scheduler, optimizer, epoch, params, args)
 
-        # validate(model, val_loader, criterion, optimizer, epoch, device, params, args)
+        # validate(model, val_loader, criterion, optimizer, epoch, params, args)
 
         is_best = False
         if loss < best_loss:

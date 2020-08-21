@@ -23,5 +23,6 @@ setup(
         'tensorflow>=2.2.0',
         'tensorboard>=2.2.1',
         # 'horovod', # manual installation required, see master README
+        'gdown',
     ],
 )

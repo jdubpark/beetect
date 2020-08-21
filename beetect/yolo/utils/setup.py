@@ -1,5 +1,8 @@
+import os
+
 import numpy as np
 import torch
+import torch.backends.cudnn as cudnn
 
 try:
     from torch.utils.tensorboard import SummaryWriter

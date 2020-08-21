@@ -429,7 +429,8 @@ class Yolov4(nn.Module):
         if pretrained:
             try:
                 url = 'https://drive.google.com/uc?id=1fcbR0bWzYfIEdLJPzOsn4R5mlvR6IQyA'
-                torch_home = os.environ['TORCH_HOME'] or os.path.join(os.path.expanduser('~'), '.torch'),
+                #torch_home = os.environ['TORCH_HOME'] or os.path.join(os.path.expanduser('~'), '.torch'),
+                torch_home = os.path.join(os.path.expanduser('~'), '.torch')
                 model_fld = os.path.join(torch_home, 'models')
                 model_dst = os.path.join(model_fld, 'yolov4.conv.137.pth')
                 if not os.path.exists(model_fld):
@@ -446,8 +447,8 @@ class Yolov4(nn.Module):
                 model_dict.update(pretrained_dict)
                 _model.load_state_dict(model_dict)
 
-            except err:
-                raise err
+            except BaseException as e:
+                raise Exception(e)
 
         # head
         self.head = Yolov4Head(output_ch, n_classes, inference)
