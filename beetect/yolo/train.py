@@ -46,7 +46,7 @@ parser.add_argument('--state_dict_dir', '-S', type=str, help='Local state dict i
 parser.add_argument('--n_epoch', type=int, default=30)
 parser.add_argument('--batch_size', '-b', type=int, default=32)
 parser.add_argument('--num_class', type=int, default=2)
-parser.add_argument('--grad_accum_steps', type=int, default=2,
+parser.add_argument('--grad_accum_steps', type=int, default=1,
                     help='Gradient accumulation steps, used to increase batch size before optimizing to offset GPU memory constraint')
 parser.add_argument('--max_grad_norm', type=float, default=0.1)
 parser.add_argument('--img_h', type=int, default=608, help='Image size')
@@ -98,19 +98,20 @@ def train(model, train_loader, criterion, scheduler, optimizer, epoch, params, a
     pbar = tqdm(train_loader, desc='==> Train', position=1)
     idx = 0
     for (images, targets) in pbar:
-        images = images.to(args.device).float()
-        targets = targets.to(args.device).float()
+        images = images.to(args.device, dtype=torch.float32)
+        targets = targets.to(args.device)
+        print(targets[0], targets[0].size())
 
-        images, targets_a, targets_b, lam = mixup_data(images, targets,
-                                                      args.alpha, args.is_cuda)
-        images, targets_a, targets_b = map(Variable, (images, targets_a, targets_b))
+        #images, targets_a, targets_b, lam = mixup_data(images, targets,
+        #                                              args.alpha, args.is_cuda)
+        #images, targets_a, targets_b = map(Variable, (images, targets_a, targets_b))
 
         outputs = model(images)
         #print(f'{epoch}-{idx}', len(outputs))
 
-        loss, loss_xy, loss_wh, loss_obj, loss_cls, loss_l2 = mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
-        # loss, loss_xy, loss_wh, loss_obj, loss_cls, loss_l2 = criterion(outputs, targets)
-        print(loss)
+        #loss, loss_xy, loss_wh, loss_obj, loss_cls, loss_l2 = mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
+        loss, loss_xy, loss_wh, loss_obj, loss_cls, loss_l2 = criterion(outputs, targets)
+        #print(loss)
 
         loss = loss.mean()
         # total_loss += loss.data[0]
@@ -237,8 +238,9 @@ if __name__ == '__main__':
     model.to(device=args.device)
 
     criterion = Yolo_loss(device=args.device, batch=args.batch_size, n_classes=args.num_class)
-    optimizer = O.AdamW(model.parameters(), lr=args.lr,
-                        eps=args.eps, betas=(args.beta1, args.beta2))
+    #optimizer = O.AdamW(model.parameters(), lr=args.lr,
+    #                    eps=args.eps, betas=(args.beta1, args.beta2))
+    optimizer = O.Adam(model.parameters(), lr=args.lr, betas=(0.9, 0.999), eps=1e-08)
 
     # chain warmup scheduler with plateau scheduler
     scheduler_plateau = O.lr_scheduler.ReduceLROnPlateau(
