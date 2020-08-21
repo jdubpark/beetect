@@ -430,7 +430,10 @@ class Yolov4(nn.Module):
             try:
                 url = 'https://drive.google.com/uc?id=1fcbR0bWzYfIEdLJPzOsn4R5mlvR6IQyA'
                 torch_home = os.environ['TORCH_HOME'] or os.path.join(os.path.expanduser('~'), '.torch'),
-                model_dst = os.path.join(torch_home, 'models', 'yolov4.conv.137.pth')
+                model_fld = os.path.join(torch_home, 'models')
+                model_dst = os.path.join(model_fld, 'yolov4.conv.137.pth')
+                if not os.path.exists(model_fld):
+                    os.makedirs(model_fld)
                 gdown.cached_download(url, model_dst)
 
                 _model = nn.Sequential(self.down1, self.down2, self.down3, self.down4, self.down5, self.neek)
