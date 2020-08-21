@@ -101,15 +101,16 @@ def train(model, train_loader, criterion, scheduler, optimizer, epoch, params, a
         images = images.to(args.device).float()
         targets = targets.to(args.device).float()
 
-        #images, targets_a, targets_b, lam = mixup_data(images, targets,
-        #                                               args.alpha, args.is_cuda)
-        #images, targets_a, targets_b = map(Variable, (images, targets_a, targets_b))
+        images, targets_a, targets_b, lam = mixup_data(images, targets,
+                                                      args.alpha, args.is_cuda)
+        images, targets_a, targets_b = map(Variable, (images, targets_a, targets_b))
 
         outputs = model(images)
         #print(f'{epoch}-{idx}', len(outputs))
 
-        #loss = mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
-        loss, loss_xy, loss_wh, loss_obj, loss_cls, loss_l2 = criterion(outputs, targets)
+        loss, loss_xy, loss_wh, loss_obj, loss_cls, loss_l2 = mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
+        # loss, loss_xy, loss_wh, loss_obj, loss_cls, loss_l2 = criterion(outputs, targets)
+        print(loss)
 
         loss = loss.mean()
         # total_loss += loss.data[0]
@@ -147,9 +148,46 @@ def train(model, train_loader, criterion, scheduler, optimizer, epoch, params, a
 
 @torch.no_grad()
 def validate(model, val_loader, optimizer, epoch, params, args):
+    start = time.time()
+    total_loss = []
+
     model.eval()
     model.is_training = False
-    # evaluate(dataset, model)
+
+    pbar = tqdm(val_loader, desc='==> Validate', position=2)
+    for (images, targets) in pbar:
+        images = images.to(args.device).float()
+        targets = targets.to(args.device).float()
+
+        images, targets_a, targets_b, lam = mixup_data(images, targets,
+                                                      args.alpha, args.is_cuda)
+        images, targets_a, targets_b = map(Variable, (images, targets_a, targets_b))
+
+        outputs = model(images)
+
+        loss, loss_xy, loss_wh, loss_obj, loss_cls, loss_l2 = mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
+
+        loss = loss.mean()
+        if loss == 0 or not torch.isfinite(loss):
+            print('loss equal zero(0)')
+            continue
+
+        total_loss.append(loss.item())
+        mean_loss = np.mean(total_loss)
+
+        pbar.update()
+        pbar.set_postfix({
+            'Loss': loss.item(),
+            'Mean_loss': mean_loss,
+            })
+        # pbar.set_description()
+
+    # end of training epoch
+    result = {'time': time.time()-start, 'loss': mean_loss}
+    for key, value in result.items():
+        print('    {:15s}: {}'.format(str(key), value))
+
+    return mean_loss
 
 
 @torch.no_grad()
@@ -230,13 +268,13 @@ if __name__ == '__main__':
     # optimizer.step()
 
     for epoch in pbar:
-        loss = train(model, train_loader, criterion, scheduler, optimizer, epoch, params, args)
+        loss_train = train(model, train_loader, criterion, scheduler, optimizer, epoch, params, args)
 
-        # validate(model, val_loader, criterion, optimizer, epoch, params, args)
+        loss_val = validate(model, val_loader, criterion, optimizer, epoch, params, args)
 
         is_best = False
-        if loss < best_loss:
-            best_loss = loss
+        if loss_val < best_loss:
+            best_loss = loss_val
             best_epoch = epoch
             is_best = True
 
@@ -244,7 +282,7 @@ if __name__ == '__main__':
             'epoch': epoch,
             'iter': iter,
             'args': args,
-            'loss': loss,
+            'loss': loss_val,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
         }
