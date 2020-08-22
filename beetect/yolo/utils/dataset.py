@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 
 import torch
+import torchvision.transforms as T
 from torch.utils.data.dataset import Dataset
 
 
@@ -373,6 +374,10 @@ class YoloWrapper(Dataset):
         image, target = self.dataset[idx] # from BeeDataset
         if self.transform is not None:
             image, target = self.transform(image, target)
+
+        if self.transform is None:
+            image = T.ToTensor()(image)
+            target['boxes'] = torch.as_tensor(target['boxes'], dtype=torch.float32)
 
         annots = torch.empty(0, 5, dtype=torch.float32)
         for i in range(len(target['boxes'])):
