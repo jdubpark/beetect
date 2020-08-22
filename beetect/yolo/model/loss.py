@@ -94,12 +94,12 @@ def bboxes_iou(bboxes_a, bboxes_b, xyxy=True, GIoU=False, DIoU=False, CIoU=False
 
 
 class Yolo_loss(nn.Module):
-    def __init__(self, n_classes=80, n_anchors=3, device=None, batch=2):
+    def __init__(self, num_classes=80, n_anchors=3, device=None, batch=2):
         super(Yolo_loss, self).__init__()
         self.device = device
         self.strides = [8, 16, 32]
         image_size = 608
-        self.n_classes = n_classes
+        self.num_classes = num_classes
         self.n_anchors = n_anchors
 
         self.anchors = [[12, 16], [19, 36], [40, 28], [36, 75], [76, 55], [72, 146], [142, 110], [192, 243], [459, 401]]
@@ -132,7 +132,7 @@ class Yolo_loss(nn.Module):
 
     def build_target(self, pred, labels, batchsize, fsize, n_ch, output_id):
         # target assignment
-        tgt_mask = torch.zeros(batchsize, self.n_anchors, fsize, fsize, 4 + self.n_classes).to(device=self.device)
+        tgt_mask = torch.zeros(batchsize, self.n_anchors, fsize, fsize, 4 + self.num_classes).to(device=self.device)
         obj_mask = torch.ones(batchsize, self.n_anchors, fsize, fsize).to(device=self.device)
         tgt_scale = torch.zeros(batchsize, self.n_anchors, fsize, fsize, 2).to(self.device)
         target = torch.zeros(batchsize, self.n_anchors, fsize, fsize, n_ch).to(self.device)
@@ -203,7 +203,7 @@ class Yolo_loss(nn.Module):
         for output_id, output in enumerate(xin):
             batchsize = output.shape[0]
             fsize = output.shape[2]
-            n_ch = 5 + self.n_classes
+            n_ch = 5 + self.num_classes
 
             output = output.view(batchsize, self.n_anchors, n_ch, fsize, fsize)
             output = output.permute(0, 1, 3, 4, 2)  # .contiguous()

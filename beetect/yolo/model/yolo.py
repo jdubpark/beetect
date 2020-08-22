@@ -326,17 +326,18 @@ class Neck(nn.Module):
 
 
 class Yolov4Head(nn.Module):
-    def __init__(self, output_ch, n_classes, inference=False):
+    def __init__(self, output_ch, num_classes, inference=False):
         super().__init__()
         self.inference = inference
+
+        num_anchors = 9
+        anchors = [12, 16, 19, 36, 40, 28, 36, 75, 76, 55, 72, 146, 142, 110, 192, 243, 459, 401]
 
         self.conv1 = Conv_Bn_Activation(128, 256, 3, 1, 'leaky')
         self.conv2 = Conv_Bn_Activation(256, output_ch, 1, 1, 'linear', bn=False, bias=True)
 
-        self.yolo1 = YoloLayer(
-                                anchor_mask=[0, 1, 2], num_classes=n_classes,
-                                anchors=[12, 16, 19, 36, 40, 28, 36, 75, 76, 55, 72, 146, 142, 110, 192, 243, 459, 401],
-                                num_anchors=9, stride=8)
+        self.yolo1 = YoloLayer(anchor_mask=[0, 1, 2], num_classes=num_classes,
+                               anchors=anchors, num_anchors=num_anchors, stride=8)
 
         # R -4
         self.conv3 = Conv_Bn_Activation(128, 256, 3, 2, 'leaky')
@@ -350,10 +351,8 @@ class Yolov4Head(nn.Module):
         self.conv9 = Conv_Bn_Activation(256, 512, 3, 1, 'leaky')
         self.conv10 = Conv_Bn_Activation(512, output_ch, 1, 1, 'linear', bn=False, bias=True)
 
-        self.yolo2 = YoloLayer(
-                                anchor_mask=[3, 4, 5], num_classes=n_classes,
-                                anchors=[12, 16, 19, 36, 40, 28, 36, 75, 76, 55, 72, 146, 142, 110, 192, 243, 459, 401],
-                                num_anchors=9, stride=16)
+        self.yolo2 = YoloLayer(anchor_mask=[3, 4, 5], num_classes=num_classes,
+                               anchors=anchors, num_anchors=num_anchors, stride=16)
 
         # R -4
         self.conv11 = Conv_Bn_Activation(256, 512, 3, 2, 'leaky')
@@ -367,10 +366,8 @@ class Yolov4Head(nn.Module):
         self.conv17 = Conv_Bn_Activation(512, 1024, 3, 1, 'leaky')
         self.conv18 = Conv_Bn_Activation(1024, output_ch, 1, 1, 'linear', bn=False, bias=True)
 
-        self.yolo3 = YoloLayer(
-                                anchor_mask=[6, 7, 8], num_classes=n_classes,
-                                anchors=[12, 16, 19, 36, 40, 28, 36, 75, 76, 55, 72, 146, 142, 110, 192, 243, 459, 401],
-                                num_anchors=9, stride=32)
+        self.yolo3 = YoloLayer(anchor_mask=[6, 7, 8], num_classes=num_classes,
+                               anchors=anchors, num_anchors=num_anchors, stride=32)
 
     def forward(self, input1, input2, input3):
         x1 = self.conv1(input1)
@@ -412,10 +409,12 @@ class Yolov4Head(nn.Module):
 
 
 class Yolov4(nn.Module):
-    def __init__(self, pretrained=False, n_classes=80, inference=False):
+    def __init__(self, pretrained=False, num_classes=80, inference=False):
         super().__init__()
 
-        output_ch = (4 + 1 + n_classes) * 3
+        # [4 box coordinates + 1 object confidence + n class confidences] * 3 anchors
+        output_ch = (4 + 1 + num_classes) * 3
+        print('output_ch', output_ch)
 
         # backbone
         self.down1 = DownSample1()
@@ -452,7 +451,7 @@ class Yolov4(nn.Module):
                 raise Exception(e)
 
         # head
-        self.head = Yolov4Head(output_ch, n_classes, inference)
+        self.head = Yolov4Head(output_ch, num_classes, inference)
 
 
     def forward(self, input):
@@ -475,13 +474,13 @@ if __name__ == "__main__":
 
     namesfile = None
     if len(sys.argv) == 6:
-        n_classes = int(sys.argv[1])
+        num_classes = int(sys.argv[1])
         weightfile = sys.argv[2]
         imgfile = sys.argv[3]
         height = int(sys.argv[4])
         width = int(sys.argv[5])
     elif len(sys.argv) == 7:
-        n_classes = int(sys.argv[1])
+        num_classes = int(sys.argv[1])
         weightfile = sys.argv[2]
         imgfile = sys.argv[3]
         height = sys.argv[4]
@@ -491,7 +490,7 @@ if __name__ == "__main__":
         print('Usage: ')
         print('  python models.py num_classes weightfile imgfile namefile')
 
-    model = Yolov4(yolov4conv137weight=None, n_classes=n_classes, inference=True)
+    model = Yolov4(yolov4conv137weight=None, num_classes=num_classes, inference=True)
 
     pretrained_dict = torch.load(weightfile, map_location=torch.device('cuda'))
     model.load_state_dict(pretrained_dict)
@@ -518,9 +517,9 @@ if __name__ == "__main__":
         boxes = do_detect(model, sized, 0.4, 0.6, use_cuda)
 
     if namesfile == None:
-        if n_classes == 20:
+        if num_classes == 20:
             namesfile = 'data/voc.names'
-        elif n_classes == 80:
+        elif num_classes == 80:
             namesfile = 'data/coco.names'
         else:
             print("please give namefile")

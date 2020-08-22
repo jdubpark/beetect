@@ -3,10 +3,10 @@ import torch.nn.functional as F
 from .torch_utils import *
 
 
-def yolo_forward(output, conf_thresh, num_classes, anchors, num_anchors, scale_x_y, only_objectness=1,
-                              validation=False):
+def yolo_forward(output, conf_thresh, num_classes, anchors, num_anchors,
+                 scale_x_y, only_objectness=1, validation=False):
     # Output would be invalid if it does not satisfy this assert
-    # assert (output.size(1) == (5 + num_classes) * num_anchors)
+    assert (output.size(1) == (5 + num_classes) * num_anchors)
 
     # print(output.size())
 
@@ -149,7 +149,7 @@ def yolo_forward(output, conf_thresh, num_classes, anchors, num_anchors, scale_x
 def yolo_forward_dynamic(output, conf_thresh, num_classes, anchors, num_anchors, scale_x_y, only_objectness=1,
                               validation=False):
     # Output would be invalid if it does not satisfy this assert
-    # assert (output.size(1) == (5 + num_classes) * num_anchors)
+    assert (output.size(1) == (5 + num_classes) * num_anchors)
 
     # print(output.size())
 

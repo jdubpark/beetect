@@ -47,7 +47,7 @@ parser.add_argument('--state_dict_dir', '-S', type=str, help='Local state dict i
 # training
 parser.add_argument('--n_epoch', type=int, default=30)
 parser.add_argument('--batch_size', '-b', type=int, default=32)
-parser.add_argument('--num_class', type=int, default=2)
+parser.add_argument('--num_classes', type=int, default=2)
 parser.add_argument('--grad_accum_steps', type=int, default=1,
                     help='Gradient accumulation steps, used to increase batch size before optimizing to offset GPU memory constraint')
 parser.add_argument('--max_grad_norm', type=float, default=0.1)
@@ -235,13 +235,13 @@ if __name__ == '__main__':
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, **kwargs)
     val_loader = DataLoader(val_dataset, batch_size=1, **kwargs)
 
-    model = Yolov4(pretrained=True, n_classes=args.num_class)
+    model = Yolov4(pretrained=True, num_classes=args.num_classes)
 
     if torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)
     model.to(device=args.device)
 
-    criterion = Yolo_loss(device=args.device, batch=args.batch_size, n_classes=args.num_class)
+    criterion = Yolo_loss(device=args.device, batch=args.batch_size, num_classes=args.num_classes)
     #optimizer = O.AdamW(model.parameters(), lr=args.lr,
     #                    eps=args.eps, betas=(args.beta1, args.beta2))
     optimizer = O.Adam(model.parameters(), lr=args.lr, betas=(0.9, 0.999), eps=1e-08)
