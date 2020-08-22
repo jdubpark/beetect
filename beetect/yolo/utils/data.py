@@ -28,14 +28,27 @@ from torch.jit.annotations import List, Tuple
 from torch.utils.data import Dataset, DataLoader
 
 
+# def collater(batch):
+#     # filter out batch item with empty target
+#     # print(batch[0][1].shape, batch[0][1])
+#     batch = [item for item in batch if item[1][0].shape[0] > 0]
+#     # reorder items
+#     image = [item[0] for item in batch]
+#     target = [item[1] for item in batch]
+#     return [image, target]
+
 def collater(batch):
-    # filter out batch item with empty target
-    # print(batch[0][1].shape, batch[0][1])
-    batch = [item for item in batch if item[1][0].shape[0] > 0]
-    # reorder items
-    image = [item[0] for item in batch]
-    target = [item[1] for item in batch]
-    return [image, target]
+    images = []
+    bboxes = []
+    for img, box in batch:
+        images.append([img])
+        bboxes.append([box])
+    images = np.concatenate(images, axis=0)
+    images = images.transpose(0, 3, 1, 2)
+    images = torch.from_numpy(images).div(255.0)
+    bboxes = np.concatenate(bboxes, axis=0)
+    bboxes = torch.from_numpy(bboxes)
+    return images, bboxes
 
 
 # https://github.com/pytorch/vision/blob/master/torchvision/models/detection/image_list.py#L7
@@ -67,17 +80,18 @@ def convert_batch(batch, device):
     images = [img.to(device, dtype=torch.float32) for img in batch[0]]
     targets = [target.to(device) for target in batch[1]]
 
-    image_sizes = [img.shape[-2:] for img in images]
-    images = batch_images(images)
-    image_sizes_list = torch.jit.annotate(List[Tuple[int, int]], [])
-
-    for image_size in image_sizes:
-        assert len(image_size) == 2
-        image_sizes_list.append((image_size[0], image_size[1]))
-
-    image_list = ImageList(images, image_sizes_list)
-
-    return image_list, targets
+    # image_sizes = [img.shape[-2:] for img in images]
+    # images = batch_images(images)
+    # image_sizes_list = torch.jit.annotate(List[Tuple[int, int]], [])
+    #
+    # for image_size in image_sizes:
+    #     assert len(image_size) == 2
+    #     image_sizes_list.append((image_size[0], image_size[1]))
+    #
+    # image_list = ImageList(images, image_sizes_list)
+    #
+    # return image_list, targets
+    return images
 
 
 # https://github.com/pytorch/vision/blob/master/torchvision/models/detection/transform.py#L187
@@ -137,124 +151,6 @@ def _onnx_batch_images(images, size_divisible=32):
     return torch.stack(padded_imgs)
 
 
-class BeeDataset(Dataset):
-    """ Bee dataset annotated in CVAT video format
-    """
-
-    def __init__(self, annot_dir, img_dir, ext='jpg'):
-        """
-        Args:
-            annot_dir (string): Root dir of annotation file
-            img_dir (string): Root dir of folder of images
-        """
-
-        # skip folders/files starting with .
-        folder_list = [f for f in os.listdir(img_dir) if not f.startswith('.')]
-
-        self.annot_lists = {}
-        self.img_dirs = {}
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-        for folder_name in folder_list:
-            # folder name is annot file name
-            annot_file = os.path.join(annot_dir, folder_name + '.xml')
-            annots, rand_prefix = self.read_annot_file(annot_file)
-            self.annot_lists.update(annots)
-            self.img_dirs[rand_prefix] = os.path.join(img_dir, folder_name)
-
-        self.frame_lists = [f for f in self.annot_lists.keys()]
-        self.ext = '.' + ext
-
-    def __len__(self):
-        return len(self.frame_lists)
-
-    def __getitem__(self, idx):
-        """
-        Format Doc: https://pytorch.org/tutorials/intermediate/torchvision_tutorial.html
-
-        Format:
-            image: PIL image of size (H, W)
-            target: dict {
-                boxes (list[N, 4]): [x0, y0, x1, y1] (N bounding boxes)
-                labels (Int64[N])
-                image_id (Int64[1]): unique for all images
-            }
-        """
-        if torch.is_tensor(idx):
-            idx = idx.tolist()
-
-        pframe = self.frame_lists[idx]
-        pre, frame = pframe.split('_')
-        img_dir = self.img_dirs[pre]
-        frame_path = os.path.join(img_dir, frame + self.ext)
-
-        image = Image.open(frame_path).convert('RGB')
-        boxes = self.annot_lists[pframe]
-        num_boxes = len(boxes)
-
-        # there is only one label for all frames (bee body)
-        labels = torch.ones((num_boxes,), dtype=torch.int64)
-        image_id = torch.tensor([idx], dtype=torch.int64)
-
-        target = {}
-        target['boxes'] = boxes # later changed to tensor
-        target['labels'] = labels
-        target['image_id'] = image_id
-
-        return image, target
-
-    def read_annot_file(self, annot_file):
-        """
-        Read annotation file .xml exported from cvat (PASCAL VOC format)
-        and return annotations by frames. Currently doesn't support
-        tracking each object by id.
-
-        Args:
-            annot_file (string): Path to the annotation file
-        """
-        tree = ET.parse(annot_file)
-        root = tree.getroot()
-        annot_frames = {} # annotated frames
-
-        # generate unique prefix for identification
-        prefix_len = 4
-        rand_prefix = ''.join(random.choices(string.ascii_letters + string.digits, k=prefix_len))
-
-        # a track contains all annotated frames for an object
-        tracks = [c for c in root if c.tag == 'track']
-
-        for track in tracks:
-            obj_id = track.attrib['id'] # assigned object id across all frames
-
-            # box is essentially an annotated frame (of an object)
-            for box in track:
-                attr = box.attrib
-
-                # skip object outside the frame (include occluded)
-                if attr['outside'] != '0': continue
-
-                frame = attr['frame'] # annotated frame id
-                pframe = '{}_{}'.format(rand_prefix, frame) # _ separater
-                # bbox position top left, bottom right
-                bbox = [attr['xtl'], attr['ytl'], attr['xbr'], attr['ybr']]
-                bbox = [float(n) for n in bbox] # string to float
-                # if len(bbox) is False:
-                #     print(pframe, bbox)
-
-                # set up frame obj in frames
-                if pframe not in annot_frames:
-                    annot_frames[pframe] = []
-
-                annot_frames[pframe].append(bbox)
-
-        # print('=' * 20)
-        # print(rand_prefix)
-        # print(annot_frames)
-        # print('=' * 20)
-
-        return annot_frames, rand_prefix
-
-
 class TransformDataset(Dataset):
     """ Wrapper around Dataset to apply transform if needed
     """
@@ -275,7 +171,7 @@ class TransformDataset(Dataset):
 
         annots = torch.empty(0, 5)
         for i in range(len(target['boxes'])):
-            # annot: [x1, y1, x2, y2, label_id] 
+            # annot: [x1, y1, x2, y2, label_id]
             annot = torch.zeros((1, 5))
             annot[0, :4] = target['boxes'][i]
             annot[0, 4] = target['labels'][i]

@@ -17,7 +17,8 @@ class Map(dict):
     __delattr__ = dict.__delitem__
 
 
-def init_args(args):
+def init_args(args, **kwargs):
+    cfg = kwargs
     params = Map({})
 
     assert os.path.isdir(args.dump_dir), 'Dump dir must be a valid dir'
@@ -35,7 +36,7 @@ def init_args(args):
     if args.is_cuda:
         torch.cuda.empty_cache()
         cudnn.deterministic = True
-        # os.environ["CUDA_VISIBLE_DEVICES"] 
+        # os.environ["CUDA_VISIBLE_DEVICES"]
 
     if args.seed is not None:
         random.seed(args.seed)
@@ -48,7 +49,9 @@ def init_args(args):
     # https://discuss.pytorch.org/t/how-to-debug-saving-model-typeerror-cant-pickle-swigpyobject-objects/66304
     params.tensorboard = SummaryWriter(log_dir=log_dir)
 
-    return args, params
+    cfg.update(vars(args))
+
+    return cfg, params
 
 
 def collater():

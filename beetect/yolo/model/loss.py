@@ -1,106 +1,8 @@
-import math
-
-import numpy as np
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
-
-def bboxes_iou(bboxes_a, bboxes_b, xyxy=True, GIoU=False, DIoU=False, CIoU=False):
-    """Calculate the Intersection of Unions (IoUs) between bounding boxes.
-    IoU is calculated as a ratio of area of the intersection
-    and area of the union.
-    Args:
-        bbox_a (array): An array whose shape is :math:`(N, 4)`.
-            :math:`N` is the number of bounding boxes.
-            The dtype should be :obj:`numpy.float32`.
-        bbox_b (array): An array similar to :obj:`bbox_a`,
-            whose shape is :math:`(K, 4)`.
-            The dtype should be :obj:`numpy.float32`.
-    Returns:
-        array:
-        An array whose shape is :math:`(N, K)`. \
-        An element at index :math:`(n, k)` contains IoUs between \
-        :math:`n` th bounding box in :obj:`bbox_a` and :math:`k` th bounding \
-        box in :obj:`bbox_b`.
-    from: https://github.com/chainer/chainercv
-    https://github.com/ultralytics/yolov3/blob/eca5b9c1d36e4f73bf2f94e141d864f1c2739e23/utils/utils.py#L262-L282
-    """
-    if bboxes_a.shape[1] != 4 or bboxes_b.shape[1] != 4:
-        raise IndexError
-
-    if xyxy:
-        # intersection top left
-        tl = torch.max(bboxes_a[:, None, :2], bboxes_b[:, :2])
-        # intersection bottom right
-        br = torch.min(bboxes_a[:, None, 2:], bboxes_b[:, 2:])
-        # convex (smallest enclosing box) top left and bottom right
-        con_tl = torch.min(bboxes_a[:, None, :2], bboxes_b[:, :2])
-        con_br = torch.max(bboxes_a[:, None, 2:], bboxes_b[:, 2:])
-        # centerpoint distance squared
-        rho2 = ((bboxes_a[:, None, 0] + bboxes_a[:, None, 2]) - (bboxes_b[:, 0] + bboxes_b[:, 2])) ** 2 / 4 + (
-                (bboxes_a[:, None, 1] + bboxes_a[:, None, 3]) - (bboxes_b[:, 1] + bboxes_b[:, 3])) ** 2 / 4
-
-        w1 = bboxes_a[:, 2] - bboxes_a[:, 0]
-        h1 = bboxes_a[:, 3] - bboxes_a[:, 1]
-        w2 = bboxes_b[:, 2] - bboxes_b[:, 0]
-        h2 = bboxes_b[:, 3] - bboxes_b[:, 1]
-
-        area_a = torch.prod(bboxes_a[:, 2:] - bboxes_a[:, :2], 1)
-        area_b = torch.prod(bboxes_b[:, 2:] - bboxes_b[:, :2], 1)
-    else:
-        # intersection top left
-        tl = torch.max((bboxes_a[:, None, :2] - bboxes_a[:, None, 2:] / 2),
-                       (bboxes_b[:, :2] - bboxes_b[:, 2:] / 2))
-        # intersection bottom right
-        br = torch.min((bboxes_a[:, None, :2] + bboxes_a[:, None, 2:] / 2),
-                       (bboxes_b[:, :2] + bboxes_b[:, 2:] / 2))
-
-        # convex (smallest enclosing box) top left and bottom right
-        con_tl = torch.min((bboxes_a[:, None, :2] - bboxes_a[:, None, 2:] / 2),
-                           (bboxes_b[:, :2] - bboxes_b[:, 2:] / 2))
-        con_br = torch.max((bboxes_a[:, None, :2] + bboxes_a[:, None, 2:] / 2),
-                           (bboxes_b[:, :2] + bboxes_b[:, 2:] / 2))
-        # centerpoint distance squared
-        rho2 = ((bboxes_a[:, None, :2] - bboxes_b[:, :2]) ** 2 / 4).sum(dim=-1)
-
-        w1 = bboxes_a[:, 2]
-        h1 = bboxes_a[:, 3]
-        w2 = bboxes_b[:, 2]
-        h2 = bboxes_b[:, 3]
-
-        area_a = torch.prod(bboxes_a[:, 2:], 1)
-        area_b = torch.prod(bboxes_b[:, 2:], 1)
-    en = (tl < br).type(tl.type()).prod(dim=2)
-    area_i = torch.prod(br - tl, 2) * en  # * ((tl < br).all())
-    area_u = area_a[:, None] + area_b - area_i
-    iou = area_i / area_u
-
-    if GIoU or DIoU or CIoU:
-        if GIoU:  # Generalized IoU https://arxiv.org/pdf/1902.09630.pdf
-            area_c = torch.prod(con_br - con_tl, 2)  # convex area
-            return iou - (area_c - area_u) / area_c  # GIoU
-        if DIoU or CIoU:  # Distance or Complete IoU https://arxiv.org/abs/1911.08287v1
-            # convex diagonal squared
-            c2 = torch.pow(con_br - con_tl, 2).sum(dim=2) + 1e-16
-            if DIoU:
-                return iou - rho2 / c2  # DIoU
-            elif CIoU:  # https://github.com/Zzh-tju/DIoU-SSD-pytorch/blob/master/utils/box/box_utils.py#L47
-                v = (4 / math.pi ** 2) * torch.pow(torch.atan(w1 / h1).unsqueeze(1) - torch.atan(w2 / h2), 2)
-                with torch.no_grad():
-                    alpha = v / (1 - iou + v)
-                return iou - (rho2 / c2 + v * alpha)  # CIoU
-    return iou
-
-
 class Yolo_loss(nn.Module):
     def __init__(self, n_classes=80, n_anchors=3, device=None, batch=2):
         super(Yolo_loss, self).__init__()
         self.device = device
         self.strides = [8, 16, 32]
-        #
-        # TODO: make image_size a parameter
-        #
         image_size = 608
         self.n_classes = n_classes
         self.n_anchors = n_anchors
@@ -141,35 +43,24 @@ class Yolo_loss(nn.Module):
         target = torch.zeros(batchsize, self.n_anchors, fsize, fsize, n_ch).to(self.device)
 
         # labels = labels.cpu().data
-        # nlabel = (labels.sum(dim=2) > 0).sum(dim=1)  # number of objects
+        nlabel = (labels.sum(dim=2) > 0).sum(dim=1)  # number of objects
+
+        truth_x_all = (labels[:, :, 2] + labels[:, :, 0]) / (self.strides[output_id] * 2)
+        truth_y_all = (labels[:, :, 3] + labels[:, :, 1]) / (self.strides[output_id] * 2)
+        truth_w_all = (labels[:, :, 2] - labels[:, :, 0]) / self.strides[output_id]
+        truth_h_all = (labels[:, :, 3] - labels[:, :, 1]) / self.strides[output_id]
+        truth_i_all = truth_x_all.to(torch.int16).cpu().numpy()
+        truth_j_all = truth_y_all.to(torch.int16).cpu().numpy()
 
         for b in range(batchsize):
-            b_labels = labels[b] # batch labels -> [x1, y1, x2, y2, label_id]
-            n = b_labels.shape[0] # number of labels in batch item
-            #print(f'...batch label {b}', b_labels.shape)
-
-            # label x midpoint: (x2 + x1) / 2
-            # label y midpoint: (y2 + y1) / 2
-            truth_x = (b_labels[:, 2] + b_labels[:, 0]) / (self.strides[output_id] * 2)
-            truth_y = (b_labels[:, 3] + b_labels[:, 1]) / (self.strides[output_id] * 2)
-            # label width: x2 - x1
-            # label height: y2 - y1
-            truth_w = (b_labels[:, 2] - b_labels[:, 0]) /  self.strides[output_id]
-            truth_h = (b_labels[:, 3] - b_labels[:, 1]) / self.strides[output_id]
-
-            # reformat the labels to YOLO format
-            # (x mid pt, y mid pt, width, height)
+            n = int(nlabel[b])
+            if n == 0:
+                continue
             truth_box = torch.zeros(n, 4).to(self.device)
-            truth_box[:, 0] = truth_x
-            truth_box[:, 1] = truth_y
-            truth_box[:, 2] = truth_w
-            truth_box[:, 3] = truth_h
-            #truth_box[:, 4] = b_labels[:, 4]
-            #print('batch truth box', truth_box.shape)
-
-            # x and y to int16 cpu
-            truth_i = truth_x.to(torch.int16).cpu().numpy()
-            truth_j = truth_y.to(torch.int16).cpu().numpy()
+            truth_box[:n, 2] = truth_w_all[b, :n]
+            truth_box[:n, 3] = truth_h_all[b, :n]
+            truth_i = truth_i_all[b, :n]
+            truth_j = truth_j_all[b, :n]
 
             # calculate iou between truth and reference anchors
             anchor_ious_all = bboxes_iou(truth_box.cpu(), self.ref_anchors[output_id], CIoU=True)
@@ -185,6 +76,9 @@ class Yolo_loss(nn.Module):
             if sum(best_n_mask) == 0:
                 continue
 
+            truth_box[:n, 0] = truth_x_all[b, :n]
+            truth_box[:n, 1] = truth_y_all[b, :n]
+
             pred_ious = bboxes_iou(pred[b].view(-1, 4), truth_box, xyxy=False)
             pred_best_iou, _ = pred_ious.max(dim=1)
             pred_best_iou = (pred_best_iou > self.ignore_thre)
@@ -198,16 +92,15 @@ class Yolo_loss(nn.Module):
                     a = best_n[ti]
                     obj_mask[b, a, j, i] = 1
                     tgt_mask[b, a, j, i, :] = 1
-                    target[b, a, j, i, 0] = truth_x[ti] - truth_x[ti].to(torch.int16).to(torch.float)
-                    target[b, a, j, i, 1] = truth_y[ti] - truth_y[ti].to(torch.int16).to(torch.float)
+                    target[b, a, j, i, 0] = truth_x_all[b, ti] - truth_x_all[b, ti].to(torch.int16).to(torch.float)
+                    target[b, a, j, i, 1] = truth_y_all[b, ti] - truth_y_all[b, ti].to(torch.int16).to(torch.float)
                     target[b, a, j, i, 2] = torch.log(
-                        truth_w[ti] / torch.Tensor(self.masked_anchors[output_id])[best_n[ti], 0] + 1e-16)
+                        truth_w_all[b, ti] / torch.Tensor(self.masked_anchors[output_id])[best_n[ti], 0] + 1e-16)
                     target[b, a, j, i, 3] = torch.log(
-                        truth_h[ti] / torch.Tensor(self.masked_anchors[output_id])[best_n[ti], 1] + 1e-16)
-                    target[b, a, j, i, 4] = 1 # truth_ids[ti]
-                    target[b, a, j, i, 5 + b_labels[ti, 4].to(torch.int16).cpu().numpy()] = 1
-                    tgt_scale[b, a, j, i, :] = torch.sqrt(2 - truth_w[ti] * truth_h[ ti] / fsize / fsize)
-
+                        truth_h_all[b, ti] / torch.Tensor(self.masked_anchors[output_id])[best_n[ti], 1] + 1e-16)
+                    target[b, a, j, i, 4] = 1
+                    target[b, a, j, i, 5 + labels[b, ti, 4].to(torch.int16).cpu().numpy()] = 1
+                    tgt_scale[b, a, j, i, :] = torch.sqrt(2 - truth_w_all[b, ti] * truth_h_all[b, ti] / fsize / fsize)
         return obj_mask, tgt_mask, tgt_scale, target
 
     def forward(self, xin, labels=None):
@@ -224,7 +117,6 @@ class Yolo_loss(nn.Module):
             output[..., np.r_[:2, 4:n_ch]] = torch.sigmoid(output[..., np.r_[:2, 4:n_ch]])
 
             pred = output[..., :4].clone()
-            # print(f'output id: {output_id}', pred[..., 0].size(), self.grid_x[output_id].size())
             pred[..., 0] += self.grid_x[output_id]
             pred[..., 1] += self.grid_y[output_id]
             pred[..., 2] = torch.exp(pred[..., 2]) * self.anchor_w[output_id]

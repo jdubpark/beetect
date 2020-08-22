@@ -22,9 +22,11 @@ except ImportError:
     from tensorboardX import SummaryWriter
 
 # don't prepend dot
+from cfg import Cfg
 from model import Yolov4, Yolo_loss
 from utils.setup import init_args
-from utils.data import collater, convert_batch, BeeDataset, TransformDataset, AugTransform
+from utils.data import collater, convert_batch, TransformDataset, AugTransform
+from utils.dataset import YoloWrapper, BeeDataset
 from utils.scheduler import GradualWarmupScheduler
 from utils.methods import mixup_data, mixup_criterion
 
@@ -201,7 +203,7 @@ def test(model, test_loader, criterion, params, args):
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    args, params = init_args(args)
+    args, params = init_args(args, **Cfg)
 
     dataset = BeeDataset(annot_dir=args.annot_dir, img_dir=args.img_dir)
 
@@ -217,10 +219,12 @@ if __name__ == '__main__':
     img_size = (args.img_h, args.img_w)
 
     # wrap dataset with transform wrapper
-    train_dataset = TransformDataset(dataset=train_dataset,
-                                     transform=AugTransform(train=True, size=img_size))
-    val_dataset = TransformDataset(dataset=val_dataset,
-                                   transform=AugTransform(train=False, size=img_size))
+    train_dataset = YoloWrapper(dataset=train_dataset,
+                                # transform=AugTransform(train=True, size=img_size),
+                                cfg=args)
+    val_dataset = YoloWrapper(dataset=val_dataset,
+                              # transform=AugTransform(train=False, size=img_size),
+                              cfg=args)
 
     kwargs = {'shuffle': True, 'collate_fn': collater}
     if args.is_cuda:
