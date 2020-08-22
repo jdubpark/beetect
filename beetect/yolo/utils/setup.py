@@ -23,10 +23,10 @@ def init_args(args, **kwargs):
 
     assert os.path.isdir(args.dump_dir), 'Dump dir must be a valid dir'
 
-    ckpt_save_dir = os.path.join(args.dump_dir, 'checkpoints')
-    log_dir = os.path.join(args.dump_dir, 'logs')
+    args.ckpt_save_dir = os.path.join(args.dump_dir, 'checkpoints')
+    args.log_dir = os.path.join(args.dump_dir, 'logs')
 
-    for dir in [ckpt_save_dir, log_dir]:
+    for dir in [args.ckpt_save_dir, args.log_dir]:
         if not os.path.isdir(dir):
             os.makedirs(dir, exist_ok=True)
 
@@ -47,11 +47,11 @@ def init_args(args, **kwargs):
 
     # don't pass it as args since it can't be serialized
     # https://discuss.pytorch.org/t/how-to-debug-saving-model-typeerror-cant-pickle-swigpyobject-objects/66304
-    params.tensorboard = SummaryWriter(log_dir=log_dir)
+    params.tensorboard = SummaryWriter(log_dir=args.log_dir)
 
     cfg.update(vars(args))
 
-    return cfg, params
+    return Map(cfg), params
 
 
 def collater():
