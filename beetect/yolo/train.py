@@ -99,8 +99,8 @@ def train(model, train_loader, criterion, scheduler, optimizer, epoch, params, a
     idx = 0
     for batch in pbar:
         images, targets = convert_batch(batch, args.device)
-        print(images.tensors.shape)
-        print(targets)
+        #print(images.tensors.shape)
+        #print(targets)
 
         #images, targets_a, targets_b, lam = mixup_data(images, targets,
         #                                              args.alpha, args.is_cuda)

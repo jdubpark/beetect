@@ -141,18 +141,12 @@ class Yolo_loss(nn.Module):
         target = torch.zeros(batchsize, self.n_anchors, fsize, fsize, n_ch).to(self.device)
 
         # labels = labels.cpu().data
-        nlabel = (labels.sum(dim=2) > 0).sum(dim=1)  # number of objects
-
-        truth_x_all = (labels[:, :, 2] + labels[:, :, 0]) / (self.strides[output_id] * 2)
-        truth_y_all = (labels[:, :, 3] + labels[:, :, 1]) / (self.strides[output_id] * 2)
-        truth_w_all = (labels[:, :, 2] - labels[:, :, 0]) / self.strides[output_id]
-        truth_h_all = (labels[:, :, 3] - labels[:, :, 1]) / self.strides[output_id]
-        truth_i_all = truth_x_all.to(torch.int16).cpu().numpy()
-        truth_j_all = truth_y_all.to(torch.int16).cpu().numpy()
+        # nlabel = (labels.sum(dim=2) > 0).sum(dim=1)  # number of objects
 
         for b in range(batchsize):
             b_labels = labels[b] # batch labels -> [x1, y1, x2, y2, label_id]
             n = b_labels.shape[0] # number of labels in batch item
+            #print(f'...batch label {b}', b_labels.shape)
 
             # label x midpoint: (x2 + x1) / 2
             # label y midpoint: (y2 + y1) / 2
@@ -170,7 +164,8 @@ class Yolo_loss(nn.Module):
             truth_box[:, 1] = truth_y
             truth_box[:, 2] = truth_w
             truth_box[:, 3] = truth_h
-            truth_ids[:, 4] = b_labels[:, 4]
+            #truth_box[:, 4] = b_labels[:, 4]
+            #print('batch truth box', truth_box.shape)
 
             # x and y to int16 cpu
             truth_i = truth_x.to(torch.int16).cpu().numpy()
