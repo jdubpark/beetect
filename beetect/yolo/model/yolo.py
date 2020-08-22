@@ -4,6 +4,7 @@ import gdown
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch import Tensor
 
 from .torch_utils import *
 from .yolo_layer import YoloLayer
@@ -455,7 +456,8 @@ class Yolov4(nn.Module):
 
 
     def forward(self, input):
-        d1 = self.down1(input)
+        x = input if isinstance(input, Tensor) else input.tensors
+        d1 = self.down1(x)
         d2 = self.down2(d1)
         d3 = self.down3(d2)
         d4 = self.down4(d3)

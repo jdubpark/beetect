@@ -24,7 +24,7 @@ except ImportError:
 # don't prepend dot
 from model import Yolov4, Yolo_loss
 from utils.setup import init_args
-from utils.data import collater, convert_batch_to_tensor, BeeDataset, TransformDataset, AugTransform
+from utils.data import collater, convert_batch, BeeDataset, TransformDataset, AugTransform
 from utils.scheduler import GradualWarmupScheduler
 from utils.methods import mixup_data, mixup_criterion
 
@@ -98,7 +98,8 @@ def train(model, train_loader, criterion, scheduler, optimizer, epoch, params, a
     pbar = tqdm(train_loader, desc='==> Train', position=1)
     idx = 0
     for batch in pbar:
-        images, targets = convert_batch_to_tensor(batch, args.device)
+        images, targets = convert_batch(batch, args.device)
+        print(images.tensors.shape)
         print(targets)
 
         #images, targets_a, targets_b, lam = mixup_data(images, targets,
