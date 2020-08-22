@@ -40,17 +40,25 @@ def rand_precalc_random(min, max, random_part):
 def fill_truth_detection(bboxes, num_boxes, classes, flip, dx, dy, sx, sy, net_w, net_h):
     if bboxes.shape[0] == 0:
         return bboxes, 10000
-    np.random.shuffle(bboxes)
+    # np.random.shuffle(bboxes)
+    # shuffle
+    idx = torch.randperm(bboxes.nelement())
+    bboxes = bboxes.view(-1)[idx].view(t.bboxes())
+
     bboxes[:, 0] -= dx
     bboxes[:, 2] -= dx
     bboxes[:, 1] -= dy
     bboxes[:, 3] -= dy
 
-    bboxes[:, 0] = np.clip(bboxes[:, 0], 0, sx)
-    bboxes[:, 2] = np.clip(bboxes[:, 2], 0, sx)
+    # bboxes[:, 0] = np.clip(bboxes[:, 0], 0, sx)
+    # bboxes[:, 2] = np.clip(bboxes[:, 2], 0, sx)
+    bboxes[:, 0] = torch.clamp(bboxes[:, 0], 0, sx)
+    bboxes[:, 2] = torch.clamp(bboxes[:, 2], 0, sx)
 
-    bboxes[:, 1] = np.clip(bboxes[:, 1], 0, sy)
-    bboxes[:, 3] = np.clip(bboxes[:, 3], 0, sy)
+    # bboxes[:, 1] = np.clip(bboxes[:, 1], 0, sy)
+    # bboxes[:, 3] = np.clip(bboxes[:, 3], 0, sy)
+    bboxes[:, 1] = torch.clamp(bboxes[:, 1], 0, sy)
+    bboxes[:, 3] = torch.clamp(bboxes[:, 3], 0, sy)
 
     out_box = list(np.where(((bboxes[:, 1] == sy) & (bboxes[:, 3] == sy)) |
                             ((bboxes[:, 0] == sx) & (bboxes[:, 2] == sx)) |
@@ -69,7 +77,8 @@ def fill_truth_detection(bboxes, num_boxes, classes, flip, dx, dy, sx, sy, net_w
     if bboxes.shape[0] > num_boxes:
         bboxes = bboxes[:num_boxes]
 
-    min_w_h = np.array([bboxes[:, 2] - bboxes[:, 0], bboxes[:, 3] - bboxes[:, 1]]).min()
+    # min_w_h = np.array([bboxes[:, 2] - bboxes[:, 0], bboxes[:, 3] - bboxes[:, 1]]).min()
+    min_w_h = ([bboxes[:, 2] - bboxes[:, 0], bboxes[:, 3] - bboxes[:, 1]]).numpy().min()
 
     bboxes[:, 0] *= (net_w / sx)
     bboxes[:, 2] *= (net_w / sx)
@@ -476,8 +485,8 @@ class YoloWrapper(Dataset):
             swidth = ow - pleft - pright
             sheight = oh - ptop - pbot
 
-            truth, min_w_h = fill_truth_detection(bboxes, self.cfg.boxes, self.cfg.num_class, flip, pleft, ptop, swidth,
-                                                  sheight, self.cfg.w, self.cfg.h)
+            truth, min_w_h = fill_truth_detection(bboxes, self.cfg.boxes, self.cfg.num_class, flip,
+                                                  pleft, ptop, swidth, sheight, self.cfg.w, self.cfg.h)
             if (min_w_h / 8) < blur and blur > 1:  # disable blur if one of the objects is too small
                 blur = min_w_h / 8
 
@@ -509,7 +518,7 @@ class YoloWrapper(Dataset):
                 right_shift = int(min((self.cfg.w - cut_x), max(0, (-int(pright) * self.cfg.w / swidth))))
                 bot_shift = int(min(self.cfg.h - cut_y, max(0, (-int(pbot) * self.cfg.h / sheight))))
 
-                out_img, out_bbox = blend_truth_mosaic(out_img, ai, truth.copy(), self.cfg.w, self.cfg.h, cut_x,
+                out_img, out_bbox = blend_truth_mosaic(out_img, ai, truth.clone().detach(), self.cfg.w, self.cfg.h, cut_x,
                                                        cut_y, i, left_shift, right_shift, top_shift, bot_shift)
                 out_bboxes.append(out_bbox)
                 # print(img_path)
