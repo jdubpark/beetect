@@ -373,7 +373,16 @@ class YoloWrapper(Dataset):
         image, target = self.dataset[idx] # from BeeDataset
         if self.transform is not None:
             image, target = self.transform(image, target)
-        return image, target
+
+        annots = torch.empty(0, 5, dtype=torch.float32)
+        for i in range(len(target['boxes'])):
+            # annot: [x1, y1, x2, y2, label_id]
+            annot = torch.zeros((1, 5), dtype=torch.float32)
+            annot[0, :4] = target['boxes'][i] # [x1, y1, x2, y2]
+            annot[0, 4] = target['labels'][i] # [..., label_id]
+            annots = torch.cat((annots, annot), dim=0)
+
+        return image, annots
 
     def __getitem__(self, idx):
         #
@@ -385,8 +394,7 @@ class YoloWrapper(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        image, target = self.get_by_idx(idx)
-        bboxes = np.array(target['boxes'], dtype=np.float) # [x1, y1, x2, y2]
+        image, bboxes = self.get_by_idx(idx)
         use_mixup = self.cfg.mixup
 
         if random.randint(0, 1):
@@ -407,8 +415,7 @@ class YoloWrapper(Dataset):
         for i in range(use_mixup + 1):
             if i != 0:
                 rand_idx = random.randrange(0, len(self.dataset))
-                image, target = self.get_by_idx(rand_idx)
-                bboxes = np.array(target['boxes'], dtype=np.float)
+                image, bboxes = self.get_by_idx(rand_idx)
 
             if image is None:
                 continue
