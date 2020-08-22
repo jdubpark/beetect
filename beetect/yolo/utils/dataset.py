@@ -372,13 +372,14 @@ class YoloWrapper(Dataset):
 
     def get_by_idx(self, idx):
         image, target = self.dataset[idx] # from BeeDataset
+
         if self.transform is not None:
             image, target = self.transform(image, target)
-
-        if self.transform is None:
+        else:
             image = T.ToTensor()(image)
             target['boxes'] = torch.as_tensor(target['boxes'], dtype=torch.float32)
 
+        # yolo -> [x midpt, y midpt, width, height]
         annots = torch.empty(0, 5, dtype=torch.float32)
         for i in range(len(target['boxes'])):
             # annot: [x1, y1, x2, y2, label_id]
@@ -479,8 +480,9 @@ class YoloWrapper(Dataset):
             if (min_w_h / 8) < blur and blur > 1:  # disable blur if one of the objects is too small
                 blur = min_w_h / 8
 
-            ai = image_data_augmentation(image, self.cfg.w, self.cfg.h, pleft, ptop, swidth, sheight, flip,
-                                         dhue, dsat, dexp, gaussian_noise, blur, truth)
+            # ai = image_data_augmentation(image, self.cfg.w, self.cfg.h, pleft, ptop, swidth, sheight, flip,
+            #                              dhue, dsat, dexp, gaussian_noise, blur, truth)
+            ai = image
 
             if use_mixup == 0:
                 out_img = ai
