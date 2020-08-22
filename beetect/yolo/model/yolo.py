@@ -424,7 +424,7 @@ class Yolov4(nn.Module):
         self.down4 = DownSample4()
         self.down5 = DownSample5()
         # neck
-        self.neek = Neck(inference)
+        self.neck = Neck(inference)
 
         # yolov4conv137 weight
         if pretrained:
@@ -438,7 +438,7 @@ class Yolov4(nn.Module):
                     os.makedirs(model_fld)
                 gdown.cached_download(url, model_dst)
 
-                _model = nn.Sequential(self.down1, self.down2, self.down3, self.down4, self.down5, self.neek)
+                _model = nn.Sequential(self.down1, self.down2, self.down3, self.down4, self.down5, self.neck)
                 pretrained_dict = torch.load(model_dst)
 
                 model_dict = _model.state_dict()
@@ -463,7 +463,7 @@ class Yolov4(nn.Module):
         d4 = self.down4(d3)
         d5 = self.down5(d4)
 
-        x20, x13, x6 = self.neek(d5, d4, d3)
+        x20, x13, x6 = self.neck(d5, d4, d3)
 
         output = self.head(x20, x13, x6)
         return output

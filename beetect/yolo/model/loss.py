@@ -151,14 +151,30 @@ class Yolo_loss(nn.Module):
         truth_j_all = truth_y_all.to(torch.int16).cpu().numpy()
 
         for b in range(batchsize):
-            n = int(nlabel[b])
-            if n == 0:
-                continue
+            b_labels = labels[b] # batch labels -> [x1, y1, x2, y2, label_id]
+            n = b_labels.shape[0] # number of labels in batch item
+
+            # label x midpoint: (x2 + x1) / 2
+            # label y midpoint: (y2 + y1) / 2
+            truth_x = (b_labels[:, 2] + b_labels[:, 0]) / (self.strides[output_id] * 2)
+            truth_y = (b_labels[:, 3] + b_labels[:, 1]) / (self.strides[output_id] * 2)
+            # label width: x2 - x1
+            # label height: y2 - y1
+            truth_w = (b_labels[:, 2] - b_labels[:, 0]) /  self.strides[output_id]
+            truth_h = (b_labels[:, 3] - b_labels[:, 1]) / self.strides[output_id]
+
+            # reformat the labels to YOLO format
+            # (x mid pt, y mid pt, width, height)
             truth_box = torch.zeros(n, 4).to(self.device)
-            truth_box[:n, 2] = truth_w_all[b, :n]
-            truth_box[:n, 3] = truth_h_all[b, :n]
-            truth_i = truth_i_all[b, :n]
-            truth_j = truth_j_all[b, :n]
+            truth_box[:, 0] = truth_x
+            truth_box[:, 1] = truth_y
+            truth_box[:, 2] = truth_w
+            truth_box[:, 3] = truth_h
+            truth_ids[:, 4] = b_labels[:, 4]
+
+            # x and y to int16 cpu
+            truth_i = truth_x.to(torch.int16).cpu().numpy()
+            truth_j = truth_y.to(torch.int16).cpu().numpy()
 
             # calculate iou between truth and reference anchors
             anchor_ious_all = bboxes_iou(truth_box.cpu(), self.ref_anchors[output_id], CIoU=True)
@@ -174,9 +190,6 @@ class Yolo_loss(nn.Module):
             if sum(best_n_mask) == 0:
                 continue
 
-            truth_box[:n, 0] = truth_x_all[b, :n]
-            truth_box[:n, 1] = truth_y_all[b, :n]
-
             pred_ious = bboxes_iou(pred[b].view(-1, 4), truth_box, xyxy=False)
             pred_best_iou, _ = pred_ious.max(dim=1)
             pred_best_iou = (pred_best_iou > self.ignore_thre)
@@ -190,15 +203,16 @@ class Yolo_loss(nn.Module):
                     a = best_n[ti]
                     obj_mask[b, a, j, i] = 1
                     tgt_mask[b, a, j, i, :] = 1
-                    target[b, a, j, i, 0] = truth_x_all[b, ti] - truth_x_all[b, ti].to(torch.int16).to(torch.float)
-                    target[b, a, j, i, 1] = truth_y_all[b, ti] - truth_y_all[b, ti].to(torch.int16).to(torch.float)
+                    target[b, a, j, i, 0] = truth_x[ti] - truth_x[ti].to(torch.int16).to(torch.float)
+                    target[b, a, j, i, 1] = truth_y[ti] - truth_y[ti].to(torch.int16).to(torch.float)
                     target[b, a, j, i, 2] = torch.log(
-                        truth_w_all[b, ti] / torch.Tensor(self.masked_anchors[output_id])[best_n[ti], 0] + 1e-16)
+                        truth_w[ti] / torch.Tensor(self.masked_anchors[output_id])[best_n[ti], 0] + 1e-16)
                     target[b, a, j, i, 3] = torch.log(
-                        truth_h_all[b, ti] / torch.Tensor(self.masked_anchors[output_id])[best_n[ti], 1] + 1e-16)
-                    target[b, a, j, i, 4] = 1
-                    target[b, a, j, i, 5 + labels[b, ti, 4].to(torch.int16).cpu().numpy()] = 1
-                    tgt_scale[b, a, j, i, :] = torch.sqrt(2 - truth_w_all[b, ti] * truth_h_all[b, ti] / fsize / fsize)
+                        truth_h[ti] / torch.Tensor(self.masked_anchors[output_id])[best_n[ti], 1] + 1e-16)
+                    target[b, a, j, i, 4] = 1 # truth_ids[ti]
+                    target[b, a, j, i, 5 + b_labels[ti, 4].to(torch.int16).cpu().numpy()] = 1
+                    tgt_scale[b, a, j, i, :] = torch.sqrt(2 - truth_w[ti] * truth_h[ ti] / fsize / fsize)
+
         return obj_mask, tgt_mask, tgt_scale, target
 
     def forward(self, xin, labels=None):
