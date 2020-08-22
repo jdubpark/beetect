@@ -283,7 +283,8 @@ class BeeDataset(Dataset):
         img_dir = self.img_dirs[pre]
         frame_path = os.path.join(img_dir, frame + self.ext)
 
-        image = Image.open(frame_path).convert('RGB') # orig is RGB+A
+        # image = Image.open(frame_path).convert('RGB') # orig is RGB+A
+        image = cv2.cvtColor(cv2.imread(frame_path), cv2.COLOR_BGR2RGB)
         boxes = self.annot_lists[pframe]
         num_boxes = len(boxes)
 
@@ -351,7 +352,7 @@ class BeeDataset(Dataset):
 
 
 class YoloWrapper(Dataset):
-    def __init__(self, dataset, cfg, transform, train=True):
+    def __init__(self, dataset, cfg, transform=None, train=True):
         super(YoloWrapper, self).__init__()
         if cfg.mixup == 2:
             print("cutmix=1 - isn't supported for Detector")
