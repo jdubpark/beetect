@@ -168,8 +168,9 @@ def image_data_augmentation(mat, w, h, pleft, ptop, swidth, sheight,
             gaussian_noise = max(gaussian_noise, 0)
             cv2.randn(noise, 0, gaussian_noise)  # mean and variance
             sized = sized + noise
-    except:
+    except BaseException as err:
         print("OpenCV can't augment image: " + str(w) + " x " + str(h))
+        print(err)
         sized = mat
 
     return sized
@@ -489,8 +490,10 @@ class YoloWrapper(Dataset):
                 out_bboxes = truth
             if use_mixup == 1:
                 if i == 0:
-                    old_img = ai.copy()
-                    old_truth = truth.copy()
+                    # old_img = ai.copy()
+                    # old_truth = truth.copy()
+                    old_img = ai.clone().detach()
+                    old_truth = truth.clone().detach()
                 elif i == 1:
                     out_img = cv2.addWeighted(ai, 0.5, old_img, 0.5)
                     out_bboxes = np.concatenate([old_truth, truth], axis=0)
