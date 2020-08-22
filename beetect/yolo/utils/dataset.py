@@ -40,25 +40,24 @@ def rand_precalc_random(min, max, random_part):
 def fill_truth_detection(bboxes, num_boxes, classes, flip, dx, dy, sx, sy, net_w, net_h):
     if bboxes.shape[0] == 0:
         return bboxes, 10000
+
     # np.random.shuffle(bboxes)
-    # shuffle
-    idx = torch.randperm(bboxes.nelement())
-    bboxes = bboxes.view(-1)[idx].view(t.bboxes())
+    print('-'*10)
+    print(dx, dy, sx, sy, net_w, net_h)
+    print(bboxes)
 
     bboxes[:, 0] -= dx
     bboxes[:, 2] -= dx
     bboxes[:, 1] -= dy
     bboxes[:, 3] -= dy
 
-    # bboxes[:, 0] = np.clip(bboxes[:, 0], 0, sx)
-    # bboxes[:, 2] = np.clip(bboxes[:, 2], 0, sx)
-    bboxes[:, 0] = torch.clamp(bboxes[:, 0], 0, sx)
-    bboxes[:, 2] = torch.clamp(bboxes[:, 2], 0, sx)
+    bboxes[:, 0] = np.clip(bboxes[:, 0], 0, sx)
+    bboxes[:, 2] = np.clip(bboxes[:, 2], 0, sx)
 
-    # bboxes[:, 1] = np.clip(bboxes[:, 1], 0, sy)
-    # bboxes[:, 3] = np.clip(bboxes[:, 3], 0, sy)
-    bboxes[:, 1] = torch.clamp(bboxes[:, 1], 0, sy)
-    bboxes[:, 3] = torch.clamp(bboxes[:, 3], 0, sy)
+    bboxes[:, 1] = np.clip(bboxes[:, 1], 0, sy)
+    bboxes[:, 3] = np.clip(bboxes[:, 3], 0, sy)
+
+    print(bboxes)
 
     out_box = list(np.where(((bboxes[:, 1] == sy) & (bboxes[:, 3] == sy)) |
                             ((bboxes[:, 0] == sx) & (bboxes[:, 2] == sx)) |
@@ -109,6 +108,7 @@ def image_data_augmentation(mat, w, h, pleft, ptop, swidth, sheight,
         img = mat
         oh, ow, _ = img.shape
         pleft, ptop, swidth, sheight = int(pleft), int(ptop), int(swidth), int(sheight)
+
         # crop
         src_rect = [pleft, ptop, swidth + pleft, sheight + ptop]  # x1,y1,x2,y2
         img_rect = [0, 0, ow, oh]
@@ -294,6 +294,9 @@ class BeeDataset(Dataset):
         img_dir = self.img_dirs[pre]
         frame_path = os.path.join(img_dir, frame + self.ext)
 
+        if not os.path.isfile(frame_path):
+            raise ValueError(f'File does not exist: {frame_path}')
+
         # image = Image.open(frame_path).convert('RGB') # orig is RGB+A
         image = cv2.cvtColor(cv2.imread(frame_path), cv2.COLOR_BGR2RGB)
         boxes = self.annot_lists[pframe]
@@ -353,11 +356,6 @@ class BeeDataset(Dataset):
                     annot_frames[pframe] = []
 
                 annot_frames[pframe].append(bbox)
-
-        # print('=' * 20)
-        # print(rand_prefix)
-        # print(annot_frames)
-        # print('=' * 20)
 
         return annot_frames, rand_prefix
 
@@ -485,48 +483,51 @@ class YoloWrapper(Dataset):
             swidth = ow - pleft - pright
             sheight = oh - ptop - pbot
 
-            truth, min_w_h = fill_truth_detection(bboxes, self.cfg.boxes, self.cfg.num_class, flip,
-                                                  pleft, ptop, swidth, sheight, self.cfg.w, self.cfg.h)
-            if (min_w_h / 8) < blur and blur > 1:  # disable blur if one of the objects is too small
-                blur = min_w_h / 8
+            # truth, min_w_h = fill_truth_detection(bboxes, self.cfg.boxes, self.cfg.num_class, flip,
+            #                                       pleft, ptop, swidth, sheight, self.cfg.w, self.cfg.h)
+            # if (min_w_h / 8) < blur and blur > 1:  # disable blur if one of the objects is too small
+            #     blur = min_w_h / 8
+            truth = bboxes
 
             # ai = image_data_augmentation(image, self.cfg.w, self.cfg.h, pleft, ptop, swidth, sheight, flip,
             #                              dhue, dsat, dexp, gaussian_noise, blur, truth)
             ai = image
 
-            if use_mixup == 0:
-                out_img = ai
-                out_bboxes = truth
-            if use_mixup == 1:
-                if i == 0:
-                    # old_img = ai.copy()
-                    # old_truth = truth.copy()
-                    old_img = ai.clone().detach()
-                    old_truth = truth.clone().detach()
-                elif i == 1:
-                    out_img = cv2.addWeighted(ai, 0.5, old_img, 0.5)
-                    out_bboxes = np.concatenate([old_truth, truth], axis=0)
-            elif use_mixup == 3:
-                if flip:
-                    tmp = pleft
-                    pleft = pright
-                    pright = tmp
-
-                left_shift = int(min(cut_x, max(0, (-int(pleft) * self.cfg.w / swidth))))
-                top_shift = int(min(cut_y, max(0, (-int(ptop) * self.cfg.h / sheight))))
-
-                right_shift = int(min((self.cfg.w - cut_x), max(0, (-int(pright) * self.cfg.w / swidth))))
-                bot_shift = int(min(self.cfg.h - cut_y, max(0, (-int(pbot) * self.cfg.h / sheight))))
-
-                out_img, out_bbox = blend_truth_mosaic(out_img, ai, truth.clone().detach(), self.cfg.w, self.cfg.h, cut_x,
-                                                       cut_y, i, left_shift, right_shift, top_shift, bot_shift)
-                out_bboxes.append(out_bbox)
-                # print(img_path)
-        if use_mixup == 3:
-            out_bboxes = np.concatenate(out_bboxes, axis=0)
-        out_bboxes1 = np.zeros([self.cfg.boxes, 5])
-        out_bboxes1[:min(out_bboxes.shape[0], self.cfg.boxes)] = out_bboxes[:min(out_bboxes.shape[0], self.cfg.boxes)]
-        return out_img, out_bboxes1
+            out_img = ai
+            out_bboxes = truth
+        #     if use_mixup == 0:
+        #         out_img = ai
+        #         out_bboxes = truth
+        #     if use_mixup == 1:
+        #         if i == 0:
+        #             # old_img = ai.copy()
+        #             # old_truth = truth.copy()
+        #             old_img = ai.clone().detach()
+        #             old_truth = truth.clone().detach()
+        #         elif i == 1:
+        #             out_img = cv2.addWeighted(ai, 0.5, old_img, 0.5)
+        #             out_bboxes = np.concatenate([old_truth, truth], axis=0)
+        #     elif use_mixup == 3:
+        #         if flip:
+        #             tmp = pleft
+        #             pleft = pright
+        #             pright = tmp
+        #
+        #         left_shift = int(min(cut_x, max(0, (-int(pleft) * self.cfg.w / swidth))))
+        #         top_shift = int(min(cut_y, max(0, (-int(ptop) * self.cfg.h / sheight))))
+        #
+        #         right_shift = int(min((self.cfg.w - cut_x), max(0, (-int(pright) * self.cfg.w / swidth))))
+        #         bot_shift = int(min(self.cfg.h - cut_y, max(0, (-int(pbot) * self.cfg.h / sheight))))
+        #
+        #         out_img, out_bbox = blend_truth_mosaic(out_img, ai, truth.clone().detach(), self.cfg.w, self.cfg.h, cut_x,
+        #                                                cut_y, i, left_shift, right_shift, top_shift, bot_shift)
+        #         out_bboxes.append(out_bbox)
+        #         # print(img_path)
+        # if use_mixup == 3:
+        #     out_bboxes = np.concatenate(out_bboxes, axis=0)
+        out_bboxes_pad = torch.zeros([self.cfg.boxes, 5])
+        out_bboxes_pad[:min(out_bboxes.shape[0], self.cfg.boxes)] = out_bboxes[:min(out_bboxes.shape[0], self.cfg.boxes)]
+        return out_img, out_bboxes_pad
 
     def _get_val_item(self, index):
         """

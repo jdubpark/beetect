@@ -28,27 +28,46 @@ from torch.jit.annotations import List, Tuple
 from torch.utils.data import Dataset, DataLoader
 
 
-# def collater(batch):
-#     # filter out batch item with empty target
-#     # print(batch[0][1].shape, batch[0][1])
-#     batch = [item for item in batch if item[1][0].shape[0] > 0]
-#     # reorder items
-#     image = [item[0] for item in batch]
-#     target = [item[1] for item in batch]
-#     return [image, target]
-
 def collater(batch):
-    images = []
-    bboxes = []
-    for img, box in batch:
-        images.append([img])
-        bboxes.append([box])
-    images = np.concatenate(images, axis=0)
-    images = images.transpose(0, 3, 1, 2)
-    images = torch.from_numpy(images).div(255.0)
-    bboxes = np.concatenate(bboxes, axis=0)
-    bboxes = torch.from_numpy(bboxes)
-    return images, bboxes
+    # filter out batch item with empty target
+    batch = [item for item in batch if item[1][0].shape[0] > 0]
+    # reorder items
+    images = [item[0] for item in batch]
+    targets = [item[1] for item in batch]
+
+    # image_sizes = [img.shape[-2:] for img in images]
+    # images = batch_images(images)
+    # image_sizes_list = torch.jit.annotate(List[Tuple[int, int]], [])
+    #
+    # for image_size in image_sizes:
+    #     assert len(image_size) == 2
+    #     image_sizes_list.append((image_size[0], image_size[1]))
+    #
+    # image_list = ImageList(images, image_sizes_list)
+    #
+    # return image_list, targets
+    return images, targets
+
+
+def convert_batch(batch, device):
+    images, targets = batch
+    images = [img.to(device, dtype=torch.float32).unsqueeze(0) for img in images]
+    targets = [tgt.to(device).unsqueeze(0) for tgt in targets]
+
+    # images are fix sized, targets are padded to cfg.boxes (60)
+    images = torch.cat(images, dim=0) # .transpose(0, 3, 1, 2)
+    # print(targets)
+    # targets = np.concatenate(targets, axis=0)
+    # targets = torch.from_numpy(targets)
+    targets = torch.cat(targets, dim=0)
+    # print(images.shape, targets.shape)
+
+    # images = np.concatenate(images, axis=0)
+    # images = images.transpose(0, 3, 1, 2)
+    # images = torch.from_numpy(images).div(255.0)
+    # bboxes = np.concatenate(bboxes, axis=0)
+    # bboxes = torch.from_numpy(bboxes)
+    return images, targets
 
 
 # https://github.com/pytorch/vision/blob/master/torchvision/models/detection/image_list.py#L7
@@ -74,24 +93,6 @@ class ImageList(object):
         # type: (Device) -> ImageList # noqa
         cast_tensor = self.tensors.to(device)
         return ImageList(cast_tensor, self.image_sizes)
-
-
-def convert_batch(batch, device):
-    images = [img.to(device, dtype=torch.float32) for img in batch[0]]
-    targets = [target.to(device) for target in batch[1]]
-
-    # image_sizes = [img.shape[-2:] for img in images]
-    # images = batch_images(images)
-    # image_sizes_list = torch.jit.annotate(List[Tuple[int, int]], [])
-    #
-    # for image_size in image_sizes:
-    #     assert len(image_size) == 2
-    #     image_sizes_list.append((image_size[0], image_size[1]))
-    #
-    # image_list = ImageList(images, image_sizes_list)
-    #
-    # return image_list, targets
-    return images
 
 
 # https://github.com/pytorch/vision/blob/master/torchvision/models/detection/transform.py#L187
