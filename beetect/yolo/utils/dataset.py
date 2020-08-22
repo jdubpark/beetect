@@ -386,7 +386,7 @@ class YoloWrapper(Dataset):
             idx = idx.tolist()
 
         image, target = self.get_by_idx(idx)
-        bboxes = target['boxes'] # [x1, y1, x2, y2]
+        bboxes = np.array(target['boxes'], dtype=np.float) # [x1, y1, x2, y2]
         use_mixup = self.cfg.mixup
 
         if random.randint(0, 1):
@@ -408,6 +408,7 @@ class YoloWrapper(Dataset):
             if i != 0:
                 rand_idx = random.randrange(0, len(self.dataset))
                 image, target = self.get_by_idx(rand_idx)
+                bboxes = np.array(target['boxes'], dtype=np.float)
 
             if image is None:
                 continue
