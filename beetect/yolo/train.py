@@ -113,6 +113,11 @@ def train(model, train_loader, criterion, scheduler, optimizer, epoch, params, a
 
         #loss, loss_xy, loss_wh, loss_obj, loss_cls, loss_l2 = mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
         loss, loss_xy, loss_wh, loss_obj, loss_cls, loss_l2 = criterion(outputs, targets)
+
+        print('\rLoss {.2f}\tXY {.2f}\tWH {.2f}\tObj {.2f}\tCls {.2f}\tL2 {.2f}'
+              .format(loss, loss_xy, loss_wh, loss_obj, loss_cls, loss_l2),
+              end='', flush=True)
+        sys.stdout.flush()
         #print(loss)
 
         loss = loss.mean()
