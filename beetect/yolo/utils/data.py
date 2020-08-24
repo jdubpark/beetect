@@ -30,6 +30,7 @@ from torch.utils.data import Dataset, DataLoader
 
 def collater(batch):
     # filter out batch item with empty target
+    batch = list(filter(lambda img: img is not None, batch))
     batch = [item for item in batch if item[1][0].shape[0] > 0]
     # reorder items
     images = [item[0] for item in batch]

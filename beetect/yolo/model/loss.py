@@ -175,9 +175,15 @@ class Yolo_loss(nn.Module):
             truth_box[:n, 1] = truth_y_all[b, :n]
 
             pred_ious = bboxes_iou(pred[b].view(-1, 4), truth_box, xyxy=False)
+            #print('='*20)
+            #print('... pred ious', pred[b].view(-1, 4).shape, pred_ious.shape)
+            #print('... non-zero', pred_ious[pred_ious > 0].shape)
             pred_best_iou, _ = pred_ious.max(dim=1)
+            #print('... pred best ious', pred_best_iou.shape)
             pred_best_iou = (pred_best_iou > self.ignore_thre)
+            #print('... pred best ious above', pred_best_iou.shape)
             pred_best_iou = pred_best_iou.view(pred[b].shape[:3])
+            #print('... pred best ious view', pred_best_iou.shape, pred[b].shape[:3])
             # set mask to zero (ignore) if pred matches truth
             obj_mask[b] = ~ pred_best_iou
 
@@ -200,11 +206,17 @@ class Yolo_loss(nn.Module):
 
     def forward(self, xin, labels=None):
         loss, loss_xy, loss_wh, loss_obj, loss_cls, loss_l2 = 0, 0, 0, 0, 0, 0
+        # xin -> [x2, x10, x18] from YoloHead
         for output_id, output in enumerate(xin):
             batchsize = output.shape[0]
-            fsize = output.shape[2]
-            n_ch = 5 + self.num_classes
+            fsize = output.shape[2] # feature size
+            n_ch = 5 + self.num_classes # num_channels = 4 box coordinates + 1 object confidence + n class confidence
 
+            #print(f'batch size: {batchsize} / n_anchors {self.n_anchors} / n_ch {n_ch} / fsize {fsize}')
+            # before view: output -> [batchsize, num_filters, feature_size, feature_size]
+            # -> num_filters = (4 box coordinates + 1 object confidence + n class confidence) * n_anchors [3] -> (5+n_class)*3
+            # after view: output -> [batchsize, n_anchors, n_channels, fsize, fsize]
+            # after permuteL output -> [batchsize, n_anchors, fsize, fsize, n_channels]
             output = output.view(batchsize, self.n_anchors, n_ch, fsize, fsize)
             output = output.permute(0, 1, 3, 4, 2)  # .contiguous()
 
@@ -231,9 +243,12 @@ class Yolo_loss(nn.Module):
             loss_xy += F.binary_cross_entropy(input=output[..., :2], target=target[..., :2],
                                               weight=tgt_scale * tgt_scale, reduction='sum')
             loss_wh += F.mse_loss(input=output[..., 2:4], target=target[..., 2:4], reduction='sum') / 2
-            loss_obj += F.binary_cross_entropy(input=output[..., 4], target=target[..., 4], reduction='sum')
-            loss_cls += F.binary_cross_entropy(input=output[..., 5:], target=target[..., 5:], reduction='sum')
-            loss_l2 += F.mse_loss(input=output, target=target, reduction='sum')
+            #print('-'*10+' object det')
+            #print(output.shape, obj_mask.shape)
+            #print(output[..., 4].shape, target[..., 4].shape)
+            loss_obj += F.binary_cross_entropy(input=output[..., 4], target=target[..., 4], reduction='sum') # sum
+            loss_cls += F.binary_cross_entropy(input=output[..., 5:], target=target[..., 5:], reduction='sum') # sum
+            loss_l2 += F.mse_loss(input=output, target=target, reduction='sum') # sum
 
         loss = loss_xy + loss_wh + loss_obj + loss_cls
 
