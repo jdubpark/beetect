@@ -295,10 +295,17 @@ class BeeDataset(Dataset):
         frame_path = os.path.join(img_dir, frame + self.ext)
 
         if not os.path.isfile(frame_path):
-            raise ValueError(f'File does not exist: {frame_path}')
+           # raise ValueError(f'File does not exist: {frame_path}')
+            print(f'File does not exist: {frame_path}')
+            return None
 
         # image = Image.open(frame_path).convert('RGB') # orig is RGB+A
-        image = cv2.cvtColor(cv2.imread(frame_path), cv2.COLOR_BGR2RGB)
+        image = cv2.imread(frame_path)
+        if image is None:
+            print(f'Image is broken: {frame_path}')
+            return None
+
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         boxes = self.annot_lists[pframe]
         num_boxes = len(boxes)
 

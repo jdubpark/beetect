@@ -397,6 +397,9 @@ class Yolov4Head(nn.Module):
         x17 = self.conv17(x16)
         x18 = self.conv18(x17)
 
+        # each x channel: [batch_size, filter_num, feature_size, feature_size]
+        # -> filter_num = [4 box coordinates + 1 object confidence, n class confidence] * 3 anchors -> (5+n)*3
+
         if self.inference:
             y1 = self.yolo1(x2)
             y2 = self.yolo2(x10)

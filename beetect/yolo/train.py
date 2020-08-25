@@ -104,6 +104,7 @@ def train(model, train_loader, criterion, scheduler, optimizer, epoch, params, a
         #print(images.tensors.shape)
         #print(targets)
 
+        #print('images', images.shape)
         #images, targets_a, targets_b, lam = mixup_data(images, targets,
         #                                              args.alpha, args.is_cuda)
         #images, targets_a, targets_b = map(Variable, (images, targets_a, targets_b))
@@ -114,7 +115,7 @@ def train(model, train_loader, criterion, scheduler, optimizer, epoch, params, a
         #loss, loss_xy, loss_wh, loss_obj, loss_cls, loss_l2 = mixup_criterion(criterion, outputs, targets_a, targets_b, lam)
         loss, loss_xy, loss_wh, loss_obj, loss_cls, loss_l2 = criterion(outputs, targets)
 
-        print('\rLoss {.2f}\tXY {.2f}\tWH {.2f}\tObj {.2f}\tCls {.2f}\tL2 {.2f}'
+        print('\rLoss {:<10.2f} XY {:<10.2f} WH {:<10.2f} Obj {:<10.2f} Cls {:<10.2f} L2 {:<10.2f}'
               .format(loss, loss_xy, loss_wh, loss_obj, loss_cls, loss_l2),
               end='', flush=True)
         sys.stdout.flush()
@@ -145,8 +146,8 @@ def train(model, train_loader, criterion, scheduler, optimizer, epoch, params, a
         # pbar.set_description()
 
     # end of training epoch
-    # scheduler.step(mean_loss)
-    scheduler.step(epoch)
+    scheduler.step(mean_loss)
+    #scheduler.step(epoch) # for gradual warmup
     result = {'time': time.time()-start, 'loss': mean_loss}
     for key, value in result.items():
         print('    {:15s}: {}'.format(str(key), value))
@@ -225,17 +226,17 @@ if __name__ == '__main__':
 
     # wrap dataset with transform wrapper
     train_dataset = YoloWrapper(dataset=train_dataset,
-                                # transform=AugTransform(train=True, size=img_size),
+                                transform=AugTransform(train=True, size=img_size),
                                 cfg=args)
     val_dataset = YoloWrapper(dataset=val_dataset,
-                              # transform=AugTransform(train=False, size=img_size),
+                              transform=AugTransform(train=False, size=img_size),
                               cfg=args)
 
     kwargs = {'shuffle': True, 'collate_fn': collater}
     if args.is_cuda:
         kwargs['num_workers'] = args.workers
         kwargs['pin_memory'] = True
-        # kwargs['drop_last'] = True
+        kwargs['drop_last'] = True
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, **kwargs)
     val_loader = DataLoader(val_dataset, batch_size=1, **kwargs)
@@ -254,8 +255,9 @@ if __name__ == '__main__':
     # chain warmup scheduler with plateau scheduler
     scheduler_plateau = O.lr_scheduler.ReduceLROnPlateau(
         optimizer, patience=args.patience, verbose=True)
-    scheduler = GradualWarmupScheduler(
-        optimizer, multiplier=1, total_epoch=5, after_scheduler=scheduler_plateau)
+    #scheduler = GradualWarmupScheduler(
+    #    optimizer, multiplier=1, total_epoch=5, after_scheduler=scheduler_plateau)
+    scheduler = scheduler_plateau
 
     best_loss = 1e5
     best_epoch = 0
@@ -281,7 +283,8 @@ if __name__ == '__main__':
     for epoch in pbar:
         loss_train = train(model, train_loader, criterion, scheduler, optimizer, epoch, params, args)
 
-        loss_val = validate(model, val_loader, criterion, optimizer, epoch, params, args)
+        loss_val = loss_train
+        #loss_val = validate(model, val_loader, criterion, optimizer, epoch, params, args)
 
         is_best = False
         if loss_val < best_loss:
@@ -292,14 +295,14 @@ if __name__ == '__main__':
         state = {
             'epoch': epoch,
             'iter': iter,
-            'args': args,
+            'args': dict(args),
             'loss': loss_val,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
         }
-        save_path = os.path.join(ckpt_save_dir, 'checkpoint_{}.pt'.format(epoch))
+        save_path = os.path.join(args.ckpt_save_dir, 'checkpoint_{}.pt'.format(epoch))
         torch.save(state, save_path)
 
         if is_best:
-            best_path = os.path.join(ckpt_save_dir, 'best_ckpt.pt')
+            best_path = os.path.join(args.ckpt_save_dir, 'best_ckpt.pt')
             shutil.copy(save_path, best_path)
