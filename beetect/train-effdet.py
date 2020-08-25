@@ -17,8 +17,8 @@ try:
 except ImportError:
     from tensorboardX import SummaryWriter
 
-from beetect.model import FocalLoss, EfficientDet, BBoxTransform, ClipBoxes
-from beetect.utils import collater, convert_batch_to_tensor, BeeDataset, TransformDataset, AugTransform
+from beetect.models.effdet import FocalLoss, EfficientDet, BBoxTransform, ClipBoxes
+from beetect.utils import collater_effnet, mixup_data, mixup_criterion, BeeDataset, TransformDataset, AugTransform
 
 """
 Train with single GPU. For distributed training,
@@ -42,9 +42,12 @@ parser.add_argument('--state_dict_dir', '-S', type=str, help='Local state dict i
 parser.add_argument('--n_epoch', type=int, default=30)
 parser.add_argument('--batch_size', '-b', type=int, default=32)
 parser.add_argument('--num_class', type=int, default=2)
+parser.add_argument('--img_h', type=int, default=512, help='All image height')
+parser.add_argument('--img_w', type=int, default=512, help='All image width')
 parser.add_argument('--grad_accum_steps', type=int, default=2,
                     help='Gradient accumulation steps, used to increase batch size before optimizing to offset GPU memory constraint')
 parser.add_argument('--max_grad_norm', type=float, default=0.1)
+parser.add_argument('--mixup', action='store_true', help='Use mixup for training')
 
 # hyperparams
 parser.add_argument('--lr', dest='lr', type=float, default=1e-2)
@@ -87,29 +90,7 @@ def iter_step(epoch, mean_loss, cls_loss, reg_loss, optimizer, params, args):
         tensorboard.add_scalar(tag='lr/lr', scalar_value=optimizer.param_groups[0]['lr'], global_step=iter)
 
 
-def mixup_data(x, y, alpha=1.0, use_cuda=True):
-    '''Returns mixed inputs, pairs of targets, and lambda'''
-    if alpha > 0:
-        lam = np.random.beta(alpha, alpha)
-    else:
-        lam = 1
-
-    batch_size = x.size()[0]
-    if use_cuda:
-        index = torch.randperm(batch_size).cuda()
-    else:
-        index = torch.randperm(batch_size)
-
-    mixed_x = lam * x + (1 - lam) * x[index, :]
-    y_a, y_b = y, y[index]
-    return mixed_x, y_a, y_b, lam
-
-
-def mixup_criterion(criterion, pred, y_a, y_b, lam):
-    return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
-
-
-def train(model, train_loader, criterion, scheduler, optimizer, epoch, device, params, args):
+def train(model, train_loader, criterion, scheduler, optimizer, epoch, params, args):
     start = time.time()
     total_loss = []
 
@@ -120,11 +101,18 @@ def train(model, train_loader, criterion, scheduler, optimizer, epoch, device, p
     pbar = tqdm(train_loader, desc='==> Train', position=1)
     idx = 0
     for (images, targets) in pbar:
-        images = images.to(device).float()
-        targets = targets.to(device).float()
+        images = images.to(args.device).float()
+        targets = targets.to(args.device)
+
+        if args.mixup:
+            images, targets_a, targets_b, lam = mixup_data(images, targets, args.alpha, use_cuda=args.is_cuda)
 
         regression, classification, anchors = model(images)
-        cls_loss, reg_loss = criterion(classification, regression, anchors, targets)
+
+        if args.mixup:
+            cls_loss, reg_loss = mixup_criterion(images, regression, classification, anchors, targets_a, targets_b, lam)
+        else:
+            cls_loss, reg_loss = criterion(classification, regression, anchors, targets)
 
         # print(cls_loss, reg_loss)
         cls_loss = cls_loss.mean()
@@ -162,14 +150,14 @@ def train(model, train_loader, criterion, scheduler, optimizer, epoch, device, p
     return mean_loss
 
 
-def validate(model, val_loader, optimizer, epoch, device, params, args):
+def validate(model, val_loader, optimizer, epoch, params, args):
     model.eval()
     model.is_training = False
     # with torch.no_grad():
     #     evaluate(dataset, model)
 
 
-def train(model, test_loader, criterion, device, params, args):
+def test(model, test_loader, criterion, params, args):
     model.eval()
 
     pbar = tqdm(train_loader, desc='==> Train', position=1)
@@ -177,8 +165,8 @@ def train(model, test_loader, criterion, device, params, args):
 
     with torch.no_grad():
         for (images, targets) in pbar:
-            images = images.to(device).float()
-            targets = targets.to(device)
+            images = images.to(args.device).float()
+            targets = targets.to(args.device)
 
             regression, classification, anchors = model(images)
 
@@ -215,6 +203,8 @@ if __name__ == '__main__':
 
     is_cuda = torch.cuda.is_available()
     device = torch.device('cuda' if is_cuda else 'cpu')
+    args.is_cuda = is_cuda
+    args.device = device
 
     if args.state_dict_dir is not None:
         args.state_dict_dir = os.path.abspath(args.state_dict_dir)
@@ -239,7 +229,7 @@ if __name__ == '__main__':
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
     # wrap dataset with transform wrapper
-    input_size = (512, 512) # smaller = memory efficient
+    input_size = (args.img_h, args.img_w)
     train_dataset = TransformDataset(dataset=train_dataset,
                                      transform=AugTransform(train=True, size=input_size))
     val_dataset = TransformDataset(dataset=val_dataset,
@@ -247,7 +237,7 @@ if __name__ == '__main__':
 
     kwargs = {'num_workers': args.workers, 'pin_memory': True} if is_cuda else {}
     kwargs['shuffle'] = True
-    kwargs['collate_fn'] = collater
+    kwargs['collate_fn'] = collater_effnet
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, **kwargs)
     val_loader = DataLoader(val_dataset, batch_size=1, **kwargs)
@@ -256,11 +246,13 @@ if __name__ == '__main__':
     config = {'input_size': 896, 'backbone': 'B3', 'W_bifpn': 160,
               'D_bifpn': 5, 'D_class': 4}
 
-    model = EfficientDet(num_classes=args.num_class,
-                                 compound_coef=args.compound_coef)
+    criterion = FocalLoss()
+
+    model = EfficientDet(criterion,
+                         num_classes=args.num_class,
+                         compound_coef=args.compound_coef)
     model.to(device)
 
-    criterion = FocalLoss()
     optimizer = O.AdamW(model.parameters(), lr=args.lr,
                         eps=args.eps, betas=(args.beta1, args.beta2))
     scheduler = O.lr_scheduler.ReduceLROnPlateau(
@@ -285,9 +277,9 @@ if __name__ == '__main__':
             print("=> no checkpoint found at '{}'".format(args.resume))
 
     for epoch in pbar:
-        loss = train(model, train_loader, criterion, scheduler, optimizer, epoch, device, params, args)
+        loss = train(model, train_loader, criterion, scheduler, optimizer, epoch, params, args)
 
-        # validate(model, val_loader, criterion, optimizer, epoch, device, params, args)
+        # validate(model, val_loader, criterion, optimizer, epoch, params, args)
 
         is_best = False
         if loss < best_loss:

@@ -175,9 +175,11 @@ class Classifier(nn.Module):
 
 
 class EfficientNet(nn.Module):
-    def __init__(self, compound_coef):
+    def __init__(self, compound_coef, num_classes):
         super(EfficientNet, self).__init__()
-        model = EffNet.from_pretrained('efficientnet-b{}'.format(compound_coef))
+        model = EffNet.from_pretrained(
+            model_name='efficientnet-b{}'.format(compound_coef),
+            num_classes=num_classes)
         del model._conv_head
         del model._bn1
         del model._avg_pooling
@@ -186,9 +188,18 @@ class EfficientNet(nn.Module):
         self.model = model
 
     def forward(self, x):
-        x = self.model._swish(self.model._bn0(self.model._conv_stem(x)))
+        # print('... input', x.shape)
+        x = self.model._conv_stem(x)
+        # print('... conv stem', x.shape)
+        x = self.model._bn0(x)
+        # print('... bn0', x.shape)
+        x = self.model._swish(x)
+        # print('... swish', x.shape)
+
+        # run efficient net
         feature_maps = []
         for idx, block in enumerate(self.model._blocks):
+            # print(f'... {idx}', x.shape)
             drop_connect_rate = self.model._global_params.drop_connect_rate
             if drop_connect_rate:
                 drop_connect_rate *= float(idx) / len(self.model._blocks)
@@ -205,11 +216,15 @@ class EfficientDet(nn.Module):
         self.compound_coef = compound_coef
 
         self.num_channels = [64, 88, 112, 160, 224, 288, 384, 384][self.compound_coef]
+        # print('... num channels', self.num_channels)
 
-        self.conv3 = nn.Conv2d(40, self.num_channels, kernel_size=1, stride=1, padding=0)
-        self.conv4 = nn.Conv2d(80, self.num_channels, kernel_size=1, stride=1, padding=0)
-        self.conv5 = nn.Conv2d(192, self.num_channels, kernel_size=1, stride=1, padding=0)
-        self.conv6 = nn.Conv2d(192, self.num_channels, kernel_size=3, stride=2, padding=1)
+        conv3_in = 48 # 40
+        conv4_in = 96 # 80
+        conv56_in = 232 # 192
+        self.conv3 = nn.Conv2d(conv3_in, self.num_channels, kernel_size=1, stride=1, padding=0)
+        self.conv4 = nn.Conv2d(conv4_in, self.num_channels, kernel_size=1, stride=1, padding=0)
+        self.conv5 = nn.Conv2d(conv56_in, self.num_channels, kernel_size=1, stride=1, padding=0)
+        self.conv6 = nn.Conv2d(conv56_in, self.num_channels, kernel_size=3, stride=2, padding=1)
         self.conv7 = nn.Sequential(nn.ReLU(),
                                    nn.Conv2d(self.num_channels, self.num_channels, kernel_size=3, stride=2, padding=1))
 
@@ -240,7 +255,7 @@ class EfficientDet(nn.Module):
         self.regressor.header.weight.data.fill_(0)
         self.regressor.header.bias.data.fill_(0)
 
-        self.backbone_net = EfficientNet(compound_coef=compound_coef)
+        self.backbone_net = EfficientNet(compound_coef, num_classes)
 
     def freeze_bn(self):
         for m in self.modules():
@@ -249,6 +264,9 @@ class EfficientDet(nn.Module):
 
     def forward(self, img_batch):
         c3, c4, c5 = self.backbone_net(img_batch)
+        # print('... c3', c3.shape)
+        # print('... c4', c4.shape)
+        # print('... c5', c5.shape)
         p3 = self.conv3(c3)
         p4 = self.conv4(c4)
         p5 = self.conv5(c5)

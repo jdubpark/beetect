@@ -1,8 +1,9 @@
 import argparse
+import os
+from PIL import Image
+
 import cv2
 import matplotlib.pyplot as plt
-import os
-
 import numpy as np
 import torch
 import torch.autograd.profiler as profiler
@@ -10,7 +11,7 @@ import torchvision.ops as ops
 import torchvision.transforms as T
 from imgaug.augmentables.bbs import BoundingBox, BoundingBoxesOnImage
 
-from beetect.model import EfficientDetBackbone
+from beetect.model_old2 import EfficientDetBackbone
 
 
 parser = argparse.ArgumentParser(description='EfficientDet Sample Test')
@@ -102,8 +103,10 @@ if __name__ == '__main__':
 
     # with profiler.profile(profile_memory=True, record_shapes=True, use_cuda=torch.cuda.is_available()) as prof:
     if args.img:
-        image = cv2.imread(args.img)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        # image = cv2.imread(args.img)
+        # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image = Image.open(args.img)
+        image = T.Resize((512, 512))(image)
         output = run_inference(image, model, device, iou_threshold=args.iou)
         plot(image, output)
     else:
@@ -123,5 +126,3 @@ if __name__ == '__main__':
     cv2.destroyAllWindows()
 
     # print(prof.key_averages().table(sort_by='cpu_time_total', row_limit=10))
-
-
