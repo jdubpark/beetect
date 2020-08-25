@@ -218,6 +218,7 @@ class EfficientDet(nn.Module):
         self.num_channels = [64, 88, 112, 160, 224, 288, 384, 384][self.compound_coef]
         # print('... num channels', self.num_channels)
 
+        # for img size (512, 512)
         conv3_in = 48 # 40
         conv4_in = 96 # 80
         conv56_in = 232 # 192
