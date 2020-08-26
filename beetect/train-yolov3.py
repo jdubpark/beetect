@@ -57,7 +57,7 @@ def calc_lr(current_steps, params, args):
 
 
 def train_step(model, trainset, optimizer, params, args):
-    pbar = tqdm(trainset, desc='==> Train', position=2)
+    pbar = tqdm(trainset, desc='==> Train', position=1)
     for image_data, target in pbar:
         with tf.GradientTape() as tape:
             pred_result = model(image_data, training=True)
@@ -106,6 +106,8 @@ def train_step(model, trainset, optimizer, params, args):
                 tf.summary.scalar('loss/prob_loss', prob_loss, step=params.global_steps)
 
             params.writer.flush()
+
+    return total_loss
 
 
 if __name__ == '__main__':
@@ -162,9 +164,16 @@ if __name__ == '__main__':
     # print([gpu.name for gpu in gpus])
     device = '/GPU:0' if gpus else '/CPU:0'
 
-    pbar = tqdm(range(args.n_epoch), desc='==> Epoch', position=1)
+    best_loss = 1e5
+
+    pbar = tqdm(range(args.n_epoch), desc='==> Epoch', position=0)
     for epoch in pbar:
         with tf.device(device):
-            train_step(model, trainset, optimizer, params, args)
+            total_loss = train_step(model, trainset, optimizer, params, args)
 
-        model.save_weights(params.ckpt_save_dir)
+        ckpt_epoch_file = os.path.join(params.ckpt_save_dir, f'epoch_{epoch}.h5')
+        model.save_weights(ckpt_epoch_file)
+
+        if total_loss < best_loss:
+            best_ckpt_file = os.path.join(params.ckpt_save_dir, 'best_epoch.h5')
+            shutil.copyfile(ckpt_epoch_file, best_ckpt_file)
