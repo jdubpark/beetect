@@ -1,4 +1,5 @@
 import argparse
+import datetime
 import os
 import time
 import shutil
@@ -35,7 +36,7 @@ parser.add_argument('--beta1', default=0.9, type=float)
 parser.add_argument('--beta2', default=0.999, type=float)
 
 # intervals
-parser.add_argument('--log_interval', type=int, default=300, help='Log interval per X iterations')
+parser.add_argument('--log_interval', type=int, default=10, help='Log interval per X batch iterations')
 parser.add_argument('--val_interval', type=int, default=1, help='Val interval per X epoch')
 
 # shallow
@@ -152,7 +153,9 @@ if __name__ == '__main__':
     # if os.path.exists(params.log_dir):
     #     shutil.rmtree(params.log_dir)
 
-    params.writer = tf.summary.create_file_writer(params.log_dir)
+    now = datetime.datetime.now()
+    writer_log_dir = os.path.join(params.log_dir, now.strftime("%Y-%m-%d_%H-%M-%S"))
+    params.writer = tf.summary.create_file_writer(writer_log_dir)
 
     #tf.debugging.set_log_device_placement(True)
     gpus = tf.config.experimental.list_physical_devices('GPU')
