@@ -166,14 +166,19 @@ if __name__ == '__main__':
 
     best_loss = 1e5
 
+    checkpoint = tf.train.Checkpoint(optimizer=optimizer, model=model)
+
     pbar = tqdm(range(args.n_epoch), desc='==> Epoch', position=0)
     for epoch in pbar:
         with tf.device(device):
             total_loss = train_step(model, trainset, optimizer, params, args)
 
-        ckpt_epoch_file = os.path.join(params.ckpt_save_dir, f'epoch_{epoch}.h5')
-        model.save_weights(ckpt_epoch_file)
+        checkpoint.save(file_prefix=params.ckpt_save_dir)
+        # checkpoint.restore(params.ckpt_save_dir).assert_consumed()
 
-        if total_loss < best_loss:
-            best_ckpt_file = os.path.join(params.ckpt_save_dir, 'best_epoch.h5')
-            shutil.copyfile(ckpt_epoch_file, best_ckpt_file)
+        # ckpt_epoch_file = os.path.join(params.ckpt_save_dir, f'epoch_{epoch}.h5')
+        # model.save_weights(ckpt_epoch_file)
+        #
+        # if total_loss < best_loss:
+        #     best_ckpt_file = os.path.join(params.ckpt_save_dir, 'best_epoch.h5')
+        #     shutil.copyfile(ckpt_epoch_file, best_ckpt_file)
