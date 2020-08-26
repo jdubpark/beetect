@@ -198,8 +198,8 @@ if __name__ == '__main__':
     dump_dir = os.path.abspath(args.dump_dir)
     annot_dir = os.path.abspath(args.annot_dir)
     img_dir = os.path.abspath(args.img_dir)
-    ckpt_save_dir = os.path.join(dump_dir, 'checkpoints')
-    log_dir = os.path.join(dump_dir, 'logs')
+    ckpt_save_dir = os.path.join(dump_dir, 'checkpoints', 'effdet')
+    log_dir = os.path.join(dump_dir, 'logs', 'effdet')
 
     is_cuda = torch.cuda.is_available()
     device = torch.device('cuda' if is_cuda else 'cpu')
