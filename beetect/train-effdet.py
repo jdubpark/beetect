@@ -143,9 +143,9 @@ def train(model, train_loader, criterion, scheduler, optimizer, epoch, params, a
 
     # end of training epoch
     scheduler.step(mean_loss)
-    result = {'time': time.time()-start, 'loss': mean_loss}
-    for key, value in result.items():
-        print('    {:15s}: {}'.format(str(key), value))
+    # result = {'time': time.time()-start, 'loss': mean_loss}
+    # for key, value in result.items():
+    #     print('    {:15s}: {}'.format(str(key), value))
 
     return mean_loss
 
@@ -238,6 +238,7 @@ if __name__ == '__main__':
     kwargs = {'num_workers': args.workers, 'pin_memory': True} if is_cuda else {}
     kwargs['shuffle'] = True
     kwargs['collate_fn'] = collater_effnet
+    kwrags['drop_last'] = True
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, **kwargs)
     val_loader = DataLoader(val_dataset, batch_size=1, **kwargs)
