@@ -34,6 +34,9 @@ parser.add_argument('--eps', default=1e-6, type=float)
 parser.add_argument('--beta1', default=0.9, type=float)
 parser.add_argument('--beta2', default=0.999, type=float)
 
+# intervals
+parser.add_argument('--log_interval', type=int, default=300, help='Log interval per X iterations')
+parser.add_argument('--val_interval', type=int, default=1, help='Val interval per X epoch')
 
 # shallow
 class Map(dict):
@@ -93,14 +96,15 @@ def train_step(model, trainset, optimizer, params, args):
             })
 
         # writing summary data
-        with params.writer.as_default():
-            tf.summary.scalar('lr', optimizer.lr, step=params.global_steps)
-            tf.summary.scalar('loss/total_loss', total_loss, step=params.global_steps)
-            tf.summary.scalar('loss/giou_loss', giou_loss, step=params.global_steps)
-            tf.summary.scalar('loss/conf_loss', conf_loss, step=params.global_steps)
-            tf.summary.scalar('loss/prob_loss', prob_loss, step=params.global_steps)
+        if params.global_steps % args.log_interval == 0:
+            with params.writer.as_default():
+                tf.summary.scalar('lr', optimizer.lr, step=params.global_steps)
+                tf.summary.scalar('loss/total_loss', total_loss, step=params.global_steps)
+                tf.summary.scalar('loss/giou_loss', giou_loss, step=params.global_steps)
+                tf.summary.scalar('loss/conf_loss', conf_loss, step=params.global_steps)
+                tf.summary.scalar('loss/prob_loss', prob_loss, step=params.global_steps)
 
-        params.writer.flush()
+            params.writer.flush()
 
 
 if __name__ == '__main__':
@@ -150,6 +154,7 @@ if __name__ == '__main__':
 
     params.writer = tf.summary.create_file_writer(params.log_dir)
 
+    #tf.debugging.set_log_device_placement(True)
     gpus = tf.config.experimental.list_physical_devices('GPU')
     # print([gpu.name for gpu in gpus])
     device = '/GPU:0' if gpus else '/CPU:0'

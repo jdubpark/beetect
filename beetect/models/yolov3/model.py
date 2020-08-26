@@ -57,6 +57,7 @@ def YOLOv3(input_layer,
     conv_sobj_branch = Conv(conv_out, (3, 3, 128, 256))
     conv_sbbox = Conv(conv_sobj_branch, (1, 1, 256, 3*n_ch), activate=False, bn=False)
 
+    print(conv_sbbox.shape, conv_mbbox.shape, conv_lbbox.shape)
     return [conv_sbbox, conv_mbbox, conv_lbbox]
 
 
