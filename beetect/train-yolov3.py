@@ -2,6 +2,7 @@ import argparse
 import datetime
 import os
 import time
+import math
 import shutil
 from tqdm import tqdm
 
@@ -24,22 +25,25 @@ parser.add_argument('--img_dir', '-I', type=str)
 # training
 parser.add_argument('--n_epoch', type=int, default=100, help='Number of epoch')
 parser.add_argument('--n_classes', type=int, default=2, help='Number of classes')
+parser.add_argument('--optim', type=str, default='adamw', help='Optimizer')
 parser.add_argument('--warmup', type=float, default=5, help='Number of epoch for warmup')
 parser.add_argument('--batch_size', '-b', type=int, default=64)
 parser.add_argument('--grad_accum_steps', '-grad', type=int, default=1,
                     help='Gradient accumulation steps (optimize per X batch iterations) to increase batch size')
 
 # hyperparams
-parser.add_argument('--lr_init', type=float, default=1e-3)
+parser.add_argument('--lr_init', type=float, default=5e-4) # 1e-3 explodes for adamw (sgdw untested)
 parser.add_argument('--lr_end', type=float, default=1e-6)
 parser.add_argument('--decay', dest='wd', type=float, default=5e-5)
-parser.add_argument('--eps', default=1e-6, type=float)
-parser.add_argument('--beta1', default=0.9, type=float)
-parser.add_argument('--beta2', default=0.999, type=float)
+parser.add_argument('--eps', default=1e-6, type=float) # for adamw
+parser.add_argument('--beta1', default=0.9, type=float) # "
+parser.add_argument('--beta2', default=0.999, type=float) # "
+parser.add_argument('--momentum', default=0.9, type=float) # for sgdw
 
 # intervals
 parser.add_argument('--log_interval', type=int, default=10, help='Log interval per X batch iterations')
 parser.add_argument('--val_interval', type=int, default=1, help='Val interval per X epoch')
+parser.add_argument('--ckpt_interval', type=int, default=2, help='Checkpoint interval')
 
 # shallow
 class Map(dict):
@@ -60,6 +64,7 @@ def calc_lr(current_steps, params, args):
 
 def train_step(model, trainset, optimizer, params, args):
     tvs = model.trainable_variables
+    acc_loss = 0
     should_accum = args.grad_accum_steps > 1
 
     if should_accum:
@@ -67,8 +72,8 @@ def train_step(model, trainset, optimizer, params, args):
         accum_gradient = [tf.zeros_like(tv) for tv in tvs]
 
     pbar = tqdm(trainset, desc='==> Train', position=1)
+    local_steps = 1
     for image_data, target in pbar:
-        print(image_data.shape)
         with tf.GradientTape() as tape:
             pred_result = model(image_data, training=True)
             giou_loss, conf_loss, prob_loss = 0, 0, 0
@@ -83,13 +88,29 @@ def train_step(model, trainset, optimizer, params, args):
                 conf_loss += loss_items[1]
                 prob_loss += loss_items[2]
 
+                loss_name = False
+                for idx, loss in enumerate(loss_items):
+                    if math.isnan(loss):
+                        loss_name = ['giou', 'conf', 'prob'][idx]
+
+                if loss_name != False:
+                    raise ValueError('{} is nan'.format(loss_name))
+
+
             total_loss = giou_loss + conf_loss + prob_loss
 
             # get gradient
             gradients = tape.gradient(total_loss, tvs)
 
+        acc_loss += total_loss
+        mean_loss = acc_loss / local_steps
         lr = calc_lr(params.global_steps, params, args)
 
+        #
+        # NOTE:
+        # Seems like grad_accum of high value (lowest tested 4) lead to exploding/vanishing grad,
+        # resulting in loss NaN.
+        #
         if should_accum and params.global_steps % args.grad_accum_steps:
             # accumulate gradient
             accum_gradient = [(acc_grad+grad) for acc_grad, grad in zip(accum_gradient, gradients)]
@@ -113,8 +134,9 @@ def train_step(model, trainset, optimizer, params, args):
         #                                                   prob_loss, total_loss))
 
         pbar.update()
+        pbar.set_description('lr {:.6f}'.format(lr))
         pbar.set_postfix({
-            'Total': '{:4.2f}'.format(total_loss),
+            'Mean': '{:4.2f}'.format(mean_loss), # accumulated
             'GIoU': '{:4.2f}'.format(giou_loss),
             'Conf': '{:4.2f}'.format(conf_loss),
             'Prob': '{:4.2f}'.format(prob_loss),
@@ -125,6 +147,7 @@ def train_step(model, trainset, optimizer, params, args):
             with params.writer.as_default():
                 tf.summary.scalar('lr', optimizer.lr, step=params.global_steps)
                 tf.summary.scalar('loss/total_loss', total_loss, step=params.global_steps)
+                tf.summary.scalar('loss/mean_loss', mean_loss, step=params.global_steps)
                 tf.summary.scalar('loss/giou_loss', giou_loss, step=params.global_steps)
                 tf.summary.scalar('loss/conf_loss', conf_loss, step=params.global_steps)
                 tf.summary.scalar('loss/prob_loss', prob_loss, step=params.global_steps)
@@ -132,9 +155,9 @@ def train_step(model, trainset, optimizer, params, args):
             params.writer.flush()
 
         # at last
+        local_steps += 1
         params.global_steps += 1
 
-    print(lr)
     return total_loss
 
 
@@ -176,10 +199,17 @@ if __name__ == '__main__':
     # first_decay_steps = 1000
     # lr_decayed = cosine_decay_restarts(learning_rate, global_step, first_decay_steps)
     # optimizer = tf.keras.optimizers.Adam()
-    optimizer = tfa.optimizers.AdamW(
-        weight_decay=args.wd, learning_rate=args.lr_init,
-        beta_1=args.beta1, beta_2=args.beta2, epsilon=args.eps,
-    )
+    if args.optim not in ['adamw', 'sgdw']:
+        raise ValueError(f'Optimizer must be a valid option. Provided: {args.optim}')
+
+    if args.optim == 'adamw':
+        optimizer = tfa.optimizers.AdamW(
+            weight_decay=args.wd, learning_rate=args.lr_init,
+            beta_1=args.beta1, beta_2=args.beta2, epsilon=args.eps,
+       )
+
+    elif args.optim == 'sgdw':
+        optimizer = tfa.optimizers.SGDW(weight_decay=args.wd, learningrate=args.lr_init, momentum=args.momentum)
 
     # if os.path.exists(params.log_dir):
     #     shutil.rmtree(params.log_dir)
@@ -205,10 +235,16 @@ if __name__ == '__main__':
         # checkpoint.save(file_prefix=params.ckpt_save_dir)
         # checkpoint.restore(params.ckpt_save_dir).assert_consumed()
 
+        save_epoch = epoch % args.ckpt_interval == 0
         ckpt_epoch_file = os.path.join(params.ckpt_save_dir, f'epoch_{epoch}.h5')
-        model.save_weights(ckpt_epoch_file)
+
+        if save_epoch:
+            model.save_weights(ckpt_epoch_file)
 
         if total_loss < best_loss:
             best_loss = total_loss
             best_ckpt_file = os.path.join(params.ckpt_save_dir, 'best_epoch.h5')
-            shutil.copyfile(ckpt_epoch_file, best_ckpt_file)
+            if save_epoch:
+                shutil.copyfile(ckpt_epoch_file, best_ckpt_file)
+            else:
+                model.save_weights(best_ckpt_file)

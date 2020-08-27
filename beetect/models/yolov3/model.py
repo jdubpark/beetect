@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import tensorflow as tf
 
@@ -188,8 +190,19 @@ def compute_loss(pred, conv, label, bboxes, strides, iou_loss_thresh, num_classe
     # print('labels', label_prob.shape, 'logits', conv_raw_prob.shape)
     prob_loss = respond_bbox * tf.nn.sigmoid_cross_entropy_with_logits(labels=label_prob, logits=conv_raw_prob)
 
+    giou_loss_ = giou_loss
+    conf_loss_ = conf_loss
+    prob_loss_ = prob_loss
     giou_loss = tf.reduce_mean(tf.reduce_sum(giou_loss, axis=[1,2,3,4]))
     conf_loss = tf.reduce_mean(tf.reduce_sum(conf_loss, axis=[1,2,3,4]))
     prob_loss = tf.reduce_mean(tf.reduce_sum(prob_loss, axis=[1,2,3,4]))
+
+    if math.isnan(giou_loss):
+        print('... giou', giou_loss, giou_loss_)
+    elif math.isnan(conf_loss):
+        print('... conf', conf_loss, conf_loss_)
+    elif math.isnan(prob_loss):
+        print('... prob', prob_loss, prob_loss_)
+
 
     return giou_loss, conf_loss, prob_loss
