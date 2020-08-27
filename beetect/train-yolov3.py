@@ -155,7 +155,8 @@ if __name__ == '__main__':
     steps_per_epoch = len(trainset) # number of batches
     params.global_steps = 1 # init at 1
     params.total_steps = args.n_epoch * steps_per_epoch
-    params.warmup_steps = int(args.warmup * params.total_steps) # int for percentage * total_steps
+    # params.warmup_steps = int(args.warmup * params.total_steps) # for percentage
+    params.warmup_steps = args.warmup * steps_per_epoch
 
     input_size = 512
     input_tensor = tf.keras.layers.Input([input_size, input_size, 3])

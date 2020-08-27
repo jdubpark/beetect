@@ -8,6 +8,7 @@ import numpy as np
 from .config import cfg
 
 def load_weights(model, weights_file):
+    """ TODO: cleaner code """
     wf = open(weights_file, 'rb')
     major, minor, revision, seen, _ = np.fromfile(wf, dtype=np.int32, count=5)
 
