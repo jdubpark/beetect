@@ -77,7 +77,7 @@ def get_anchors(anchors_path, type='baseline'):
 
 
 def image_preporcess(image, target_size, gt_boxes=None):
-    ih, iw = target_size[0], target_size[1]
+    ih, iw = target_size, target_size
     h, w, _ = image.shape
 
     scale = min(iw/w, ih/h)
