@@ -173,12 +173,13 @@ if __name__ == '__main__':
         with tf.device(device):
             total_loss = train_step(model, trainset, optimizer, params, args)
 
-        checkpoint.save(file_prefix=params.ckpt_save_dir)
+        #checkpoint.save(file_prefix=params.ckpt_save_dir)
         # checkpoint.restore(params.ckpt_save_dir).assert_consumed()
 
-        # ckpt_epoch_file = os.path.join(params.ckpt_save_dir, f'epoch_{epoch}.h5')
-        # model.save_weights(ckpt_epoch_file)
-        #
-        # if total_loss < best_loss:
-        #     best_ckpt_file = os.path.join(params.ckpt_save_dir, 'best_epoch.h5')
-        #     shutil.copyfile(ckpt_epoch_file, best_ckpt_file)
+        ckpt_epoch_file = os.path.join(params.ckpt_save_dir, f'epoch_{epoch}.h5')
+        model.save_weights(ckpt_epoch_file)
+        
+        if total_loss < best_loss:
+            best_loss = total_loss
+            best_ckpt_file = os.path.join(params.ckpt_save_dir, 'best_epoch.h5')
+            shutil.copyfile(ckpt_epoch_file, best_ckpt_file)
