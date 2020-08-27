@@ -26,6 +26,8 @@ parser.add_argument('--n_epoch', type=int, default=100, help='Number of epoch')
 parser.add_argument('--n_classes', type=int, default=2, help='Number of classes')
 parser.add_argument('--warmup', type=float, default=0.1, help='% of epoch for warmup')
 parser.add_argument('--batch_size', '-b', type=int, default=64)
+parser.add_argument('--grad_accum_steps', '-grad', type=int, default=1,
+                    help='Gradient accumulation steps (optimize per X batch iterations) to increase batch size')
 
 # hyperparams
 parser.add_argument('--lr_init', type=float, default=1e-3)
@@ -57,6 +59,13 @@ def calc_lr(current_steps, params, args):
 
 
 def train_step(model, trainset, optimizer, params, args):
+    tvs = model.trainable_variables
+    should_accum = args.grad_accum_steps > 1
+
+    if should_accum:
+        # create empty gradient list (not a tf.Variable list)
+        accum_gradient = [tf.zeros_like(tv) for tv in tvs]
+
     pbar = tqdm(trainset, desc='==> Train', position=1)
     for image_data, target in pbar:
         with tf.GradientTape() as tape:
@@ -75,9 +84,22 @@ def train_step(model, trainset, optimizer, params, args):
 
             total_loss = giou_loss + conf_loss + prob_loss
 
-            gradients = tape.gradient(total_loss, model.trainable_variables)
+            # get gradient
+            gradients = tape.gradient(total_loss, tvs)
 
-        optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+        if should_accum and params.global_steps % args.grad_accum_steps:
+            # accumulate gradient
+            accum_gradient = [(acc_grad+grad) for acc_grad, grad in zip(accum_gradient, gradients)]
+            # calculate mean grad
+            accum_gradient = [grad/args.grad_accum_steps for grad in accum_gradient]
+            # apply mean-calculated accum_grad
+            optimizer.apply_gradients(zip(accum_gradient, tvs))
+            # reset accum grad
+            accum_gradient = [tf.zeros_like(tv) for tv in tvs]
+
+        else:
+            optimizer.apply_gradients(zip(gradients, tvs))
+
         # tf.print("=> STEP %4d   lr: %.6f   giou_loss: %4.2f   conf_loss: %4.2f   "
         #          "prob_loss: %4.2f   total_loss: %4.2f" %(params.global_steps, optimizer.lr.numpy(),
         #                                                   giou_loss, conf_loss,
@@ -166,19 +188,19 @@ if __name__ == '__main__':
 
     best_loss = 1e5
 
-    checkpoint = tf.train.Checkpoint(optimizer=optimizer, model=model)
+    # checkpoint = tf.train.Checkpoint(optimizer=optimizer, model=model)
 
     pbar = tqdm(range(args.n_epoch), desc='==> Epoch', position=0)
     for epoch in pbar:
         with tf.device(device):
             total_loss = train_step(model, trainset, optimizer, params, args)
 
-        #checkpoint.save(file_prefix=params.ckpt_save_dir)
+        # checkpoint.save(file_prefix=params.ckpt_save_dir)
         # checkpoint.restore(params.ckpt_save_dir).assert_consumed()
 
         ckpt_epoch_file = os.path.join(params.ckpt_save_dir, f'epoch_{epoch}.h5')
         model.save_weights(ckpt_epoch_file)
-        
+
         if total_loss < best_loss:
             best_loss = total_loss
             best_ckpt_file = os.path.join(params.ckpt_save_dir, 'best_epoch.h5')
