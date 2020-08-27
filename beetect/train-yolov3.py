@@ -24,7 +24,7 @@ parser.add_argument('--img_dir', '-I', type=str)
 # training
 parser.add_argument('--n_epoch', type=int, default=100, help='Number of epoch')
 parser.add_argument('--n_classes', type=int, default=2, help='Number of classes')
-parser.add_argument('--warmup', type=float, default=0.1, help='% of epoch for warmup')
+parser.add_argument('--warmup', type=float, default=5, help='Number of epoch for warmup')
 parser.add_argument('--batch_size', '-b', type=int, default=64)
 parser.add_argument('--grad_accum_steps', '-grad', type=int, default=1,
                     help='Gradient accumulation steps (optimize per X batch iterations) to increase batch size')
@@ -155,7 +155,7 @@ if __name__ == '__main__':
     steps_per_epoch = len(trainset) # number of batches
     params.global_steps = 1 # init at 1
     params.total_steps = args.n_epoch * steps_per_epoch
-    params.warmup_steps = int(args.warmup * params.total_steps)
+    params.warmup_steps = int(args.warmup * params.total_steps) # int for percentage * total_steps
 
     input_size = 512
     input_tensor = tf.keras.layers.Input([input_size, input_size, 3])
