@@ -87,6 +87,8 @@ def train_step(model, trainset, optimizer, params, args):
             # get gradient
             gradients = tape.gradient(total_loss, tvs)
 
+        lr = calc_lr(params.global_steps, params, args)
+
         if should_accum and params.global_steps % args.grad_accum_steps:
             # accumulate gradient
             accum_gradient = [(acc_grad+grad) for acc_grad, grad in zip(accum_gradient, gradients)]
@@ -96,19 +98,18 @@ def train_step(model, trainset, optimizer, params, args):
             optimizer.apply_gradients(zip(accum_gradient, tvs))
             # reset accum grad
             accum_gradient = [tf.zeros_like(tv) for tv in tvs]
+            # update lr (after applying accum_grad)
+            optimizer.lr.assign(lr)
 
         else:
             optimizer.apply_gradients(zip(gradients, tvs))
+            # update lr
+            optimizer.lr.assign(lr)
 
         # tf.print("=> STEP %4d   lr: %.6f   giou_loss: %4.2f   conf_loss: %4.2f   "
         #          "prob_loss: %4.2f   total_loss: %4.2f" %(params.global_steps, optimizer.lr.numpy(),
         #                                                   giou_loss, conf_loss,
         #                                                   prob_loss, total_loss))
-
-        # update learning rate
-        params.global_steps += 1
-        lr = calc_lr(params.global_steps, params, args)
-        optimizer.lr.assign(lr)
 
         pbar.update()
         pbar.set_postfix({
@@ -128,6 +129,9 @@ def train_step(model, trainset, optimizer, params, args):
                 tf.summary.scalar('loss/prob_loss', prob_loss, step=params.global_steps)
 
             params.writer.flush()
+
+        # at last
+        params.global_steps += 1
 
     return total_loss
 
@@ -149,7 +153,7 @@ if __name__ == '__main__':
 
     trainset = Dataset(annot_dir=args.annot_dir, img_dir=args.img_dir, batch_size=args.batch_size)
     steps_per_epoch = len(trainset) # number of batches
-    params.global_steps = 0
+    params.global_steps = 1 # init at 1
     params.total_steps = args.n_epoch * steps_per_epoch
     params.warmup_steps = int(args.warmup * params.total_steps)
 
