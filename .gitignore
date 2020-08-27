@@ -9,3 +9,4 @@ runs*/
 config.txt
 logs/
 model_old*/
+pretrained/
