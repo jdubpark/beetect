@@ -4,7 +4,6 @@ from .common import Conv, ResBlock
 
 
 def darknet53(input_data):
-
     output = Conv(input_data, (3, 3,  3,  32))
     output = Conv(output, (3, 3, 32,  64), downsample=True)
 

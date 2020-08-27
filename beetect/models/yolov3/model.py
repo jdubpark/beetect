@@ -16,7 +16,7 @@ from .config import cfg
 
 
 def YOLOv3(input_layer,
-           num_classes=80,
+           num_classes=2,
            anchors=[1.25,1.625, 2.0,3.75, 4.125,2.875, 1.875,3.8125, 3.875,2.8125, 3.6875,7.4375, 3.625,2.8125, 4.875,6.1875, 11.65625,10.1875],
            strides=[8, 16, 32]):
     n_ch = num_classes + 5
@@ -63,7 +63,7 @@ def YOLOv3(input_layer,
     return [conv_sbbox, conv_mbbox, conv_lbbox]
 
 
-def decode(conv_output, strides, anchors, num_classes=80, i=0):
+def decode(conv_output, strides, anchors, num_classes=2, i=0):
     """
     return Tensor[(batch_size, output_size, output_size, anchor_per_scale, 5 + num_classeses)]
             contains (x, y, w, h, score, probability)
@@ -78,7 +78,7 @@ def decode(conv_output, strides, anchors, num_classes=80, i=0):
     conv_raw_dxdy = conv_output[:, :, :, :, 0:2]
     conv_raw_dwdh = conv_output[:, :, :, :, 2:4]
     conv_raw_conf = conv_output[:, :, :, :, 4:5]
-    conv_raw_prob = conv_output[:, :, :, :, 5: ]
+    conv_raw_prob = conv_output[:, :, :, :, 5:]
 
     y = tf.tile(tf.range(output_size, dtype=tf.int32)[:, tf.newaxis], [1, output_size])
     x = tf.tile(tf.range(output_size, dtype=tf.int32)[tf.newaxis, :], [output_size, 1])
@@ -149,7 +149,7 @@ def bbox_giou(boxes1, boxes2):
     return giou
 
 
-def compute_loss(pred, conv, label, bboxes, strides, iou_loss_thresh, num_classes=80, i=0):
+def compute_loss(pred, conv, label, bboxes, strides, iou_loss_thresh, num_classes=2, i=0):
     n_ch = 5 + num_classes
 
     conv_shape = tf.shape(conv)

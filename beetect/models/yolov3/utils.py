@@ -14,8 +14,8 @@ def load_weights(model, weights_file):
 
     j = 0
     for i in range(75):
-        conv_layer_name = 'conv2d_%d' %i if i > 0 else 'conv2d'
-        bn_layer_name = 'batch_normalization_%d' %j if j > 0 else 'batch_normalization'
+        conv_layer_name = 'conv2d_%d'%i if i > 0 else 'conv2d'
+        bn_layer_name = 'batch_norm_%d'%j if j > 0 else 'batch_norm' # reflects class name in common.py
 
         conv_layer = model.get_layer(conv_layer_name)
         filters = conv_layer.filters
@@ -44,6 +44,10 @@ def load_weights(model, weights_file):
         else:
             conv_layer.set_weights([conv_weights, conv_bias])
 
+    # print(wf.read())
+    #
+    # NOTE: assert error flags, wf is not fully read
+    #
     assert len(wf.read()) == 0, 'failed to read all data'
     wf.close()
 
@@ -73,7 +77,7 @@ def get_anchors(anchors_path, type='baseline'):
 
 
 def image_preporcess(image, target_size, gt_boxes=None):
-    ih, iw = target_size, target_size
+    ih, iw = target_size[0], target_size[1]
     h, w, _ = image.shape
 
     scale = min(iw/w, ih/h)

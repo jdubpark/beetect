@@ -106,11 +106,6 @@ def train_step(model, trainset, optimizer, params, args):
         mean_loss = acc_loss / local_steps
         lr = calc_lr(params.global_steps, params, args)
 
-        #
-        # NOTE:
-        # Seems like grad_accum of high value (lowest tested 4) lead to exploding/vanishing grad,
-        # resulting in loss NaN.
-        #
         if should_accum and params.global_steps % args.grad_accum_steps:
             # accumulate gradient
             accum_gradient = [(acc_grad+grad) for acc_grad, grad in zip(accum_gradient, gradients)]
@@ -236,15 +231,15 @@ if __name__ == '__main__':
         # checkpoint.restore(params.ckpt_save_dir).assert_consumed()
 
         save_epoch = epoch % args.ckpt_interval == 0
-        ckpt_epoch_file = os.path.join(params.ckpt_save_dir, f'epoch_{epoch}.h5')
+        ckpt_epoch_file = os.path.join(params.ckpt_save_dir, f'epoch_{epoch}')
 
         if save_epoch:
             model.save_weights(ckpt_epoch_file)
 
         if total_loss < best_loss:
             best_loss = total_loss
-            best_ckpt_file = os.path.join(params.ckpt_save_dir, 'best_epoch.h5')
-            if save_epoch:
-                shutil.copyfile(ckpt_epoch_file, best_ckpt_file)
-            else:
-                model.save_weights(best_ckpt_file)
+            best_ckpt_file = os.path.join(params.ckpt_save_dir, 'best_epoch')
+            # if save_epoch:
+            #     shutil.copyfile(ckpt_epoch_file, best_ckpt_file)
+            # else:
+            model.save_weights(best_ckpt_file)
