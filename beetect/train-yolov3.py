@@ -153,7 +153,7 @@ def train_step(model, trainset, optimizer, params, args):
         local_steps += 1
         params.global_steps += 1
 
-    return total_loss
+    return mean_loss
 
 
 if __name__ == '__main__':
@@ -225,7 +225,7 @@ if __name__ == '__main__':
     pbar = tqdm(range(args.n_epoch), desc='==> Epoch', position=0)
     for epoch in pbar:
         with tf.device(device):
-            total_loss = train_step(model, trainset, optimizer, params, args)
+            mean_loss = train_step(model, trainset, optimizer, params, args)
 
         # checkpoint.save(file_prefix=params.ckpt_save_dir)
         # checkpoint.restore(params.ckpt_save_dir).assert_consumed()
@@ -236,8 +236,8 @@ if __name__ == '__main__':
         if save_epoch:
             model.save_weights(ckpt_epoch_file)
 
-        if total_loss < best_loss:
-            best_loss = total_loss
+        if mean_loss < best_loss:
+            best_loss = mean_loss
             best_ckpt_file = os.path.join(params.ckpt_save_dir, 'best_epoch')
             # if save_epoch:
             #     shutil.copyfile(ckpt_epoch_file, best_ckpt_file)
