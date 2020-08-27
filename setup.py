@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name='beetect',
     version='1.0',
-    packages=[],
+    packages=['beetect'],
     python_requires='>=3.6',
     install_requires=[
         'Pillow',

@@ -91,6 +91,8 @@ class Dataset(object):
         return self.num_batchs
 
     def __iter__(self):
+        if self.is_train:
+            np.random.shuffle(self.frame_lists)
         return self
 
     def __next__(self):

@@ -68,6 +68,7 @@ def train_step(model, trainset, optimizer, params, args):
 
     pbar = tqdm(trainset, desc='==> Train', position=1)
     for image_data, target in pbar:
+        print(image_data.shape)
         with tf.GradientTape() as tape:
             pred_result = model(image_data, training=True)
             giou_loss, conf_loss, prob_loss = 0, 0, 0
@@ -133,6 +134,7 @@ def train_step(model, trainset, optimizer, params, args):
         # at last
         params.global_steps += 1
 
+    print(lr)
     return total_loss
 
 
