@@ -231,15 +231,15 @@ if __name__ == '__main__':
         # checkpoint.restore(params.ckpt_save_dir).assert_consumed()
 
         save_epoch = epoch % args.ckpt_interval == 0
-        ckpt_epoch_file = os.path.join(params.ckpt_save_dir, f'epoch_{epoch}')
+        ckpt_epoch_file = os.path.join(params.ckpt_save_dir, f'epoch_{epoch}.h5')
 
         if save_epoch:
-            model.save_weights(ckpt_epoch_file)
+            model.save(ckpt_epoch_file)
 
         if mean_loss < best_loss:
             best_loss = mean_loss
-            best_ckpt_file = os.path.join(params.ckpt_save_dir, 'best_epoch')
+            best_ckpt_file = os.path.join(params.ckpt_save_dir, 'best_epoch.h5')
             # if save_epoch:
             #     shutil.copyfile(ckpt_epoch_file, best_ckpt_file)
             # else:
-            model.save_weights(best_ckpt_file)
+            model.save(best_ckpt_file)
