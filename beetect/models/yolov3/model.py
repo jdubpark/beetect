@@ -206,12 +206,22 @@ def compute_loss(pred, conv, label, bboxes, strides, iou_loss_thresh, num_classe
     conf_loss = tf.reduce_mean(tf.reduce_sum(conf_loss, axis=[1,2,3,4]))
     prob_loss = tf.reduce_mean(tf.reduce_sum(prob_loss, axis=[1,2,3,4]))
 
+    isNan = False
     if math.isnan(giou_loss):
         print('... giou', giou_loss, giou_loss_)
+        isNan = True
     elif math.isnan(conf_loss):
         print('... conf', conf_loss, conf_loss_)
+        isNan = True
     elif math.isnan(prob_loss):
         print('... prob', prob_loss, prob_loss_)
+        isNan = True
+
+    if isNan:
+        print('-'*20)
+        print(label, label.shape)
+        print('-'*20)
+        print(bboxes, bboxes.shape)
 
 
     return giou_loss, conf_loss, prob_loss
