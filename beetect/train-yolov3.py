@@ -197,20 +197,20 @@ if __name__ == '__main__':
     # first_decay_steps = 1000
     # lr_decayed = cosine_decay_restarts(learning_rate, global_step, first_decay_steps)
     # optimizer = tf.keras.optimizers.Adam()
-    if args.optim not in ['adamw', 'sgdw']:
+    if args.optim not in ['adam', 'adamw', 'sgdw']:
         raise ValueError(f'Optimizer must be a valid option. Provided: {args.optim}')
 
-    if args.optim == 'adamw':
+    if args.optim == 'adam':
+        # use trackable optim for ckpt manager
+        optimizer = tf.compat.v2.keras.optimizers.Adam(learning_rate=args.lr_init)
+
+    elif args.optim == 'adamw':
         optimizer = tfa.optimizers.AdamW(
             weight_decay=args.wd, learning_rate=args.lr_init,
-            beta_1=args.beta1, beta_2=args.beta2, epsilon=args.eps,
-       )
+            beta_1=args.beta1, beta_2=args.beta2, epsilon=args.eps)
 
     elif args.optim == 'sgdw':
         optimizer = tfa.optimizers.SGDW(weight_decay=args.wd, learningrate=args.lr_init, momentum=args.momentum)
-
-    # if os.path.exists(params.log_dir):
-    #     shutil.rmtree(params.log_dir)
 
     now = datetime.datetime.now()
     writer_log_dir = os.path.join(params.log_dir, now.strftime("%Y-%m-%d_%H-%M-%S"))
