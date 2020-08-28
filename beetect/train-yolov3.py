@@ -23,8 +23,8 @@ parser.add_argument('--annot_dir', '-A', type=str)
 parser.add_argument('--img_dir', '-I', type=str)
 
 # training
-parser.add_argument('--n_epoch', type=int, default=100, help='Number of epoch')
-parser.add_argument('--n_classes', type=int, default=2, help='Number of classes')
+parser.add_argument('--num_epochs', '-e', type=int, default=100, help='Number of epoch')
+parser.add_argument('--num_classes', type=int, default=2, help='Number of classes')
 parser.add_argument('--optim', type=str, default='adamw', help='Optimizer')
 parser.add_argument('--warmup', type=float, default=5, help='Number of epoch for warmup')
 parser.add_argument('--batch_size', '-b', type=int, default=64)
@@ -44,6 +44,9 @@ parser.add_argument('--momentum', default=0.9, type=float) # for sgdw
 parser.add_argument('--log_interval', type=int, default=10, help='Log interval per X batch iterations')
 parser.add_argument('--val_interval', type=int, default=1, help='Val interval per X epoch')
 parser.add_argument('--ckpt_interval', type=int, default=2, help='Checkpoint interval')
+
+# misc
+parser.add_argument('--ckpt_max_keep', type=int, default=10, help='Maximum number of checkpoints to keep while saving new')
 
 # shallow
 class Map(dict):
@@ -83,7 +86,7 @@ def train_step(model, trainset, optimizer, params, args):
             for i in range(3):
                 conv, pred = pred_result[i*2], pred_result[i*2+1]
                 loss_items = compute_loss(pred, conv, *target[i], params.strides,
-                                          params.iou_loss_thresh, args.n_classes, i)
+                                          params.iou_loss_thresh, args.num_classes, i)
                 giou_loss += loss_items[0]
                 conf_loss += loss_items[1]
                 prob_loss += loss_items[2]
@@ -174,18 +177,18 @@ if __name__ == '__main__':
     trainset = Dataset(annot_dir=args.annot_dir, img_dir=args.img_dir, batch_size=args.batch_size)
     steps_per_epoch = len(trainset) # number of batches
     params.global_steps = 1 # init at 1
-    params.total_steps = args.n_epoch * steps_per_epoch
+    params.total_steps = args.num_epochs * steps_per_epoch
     # params.warmup_steps = int(args.warmup * params.total_steps) # for percentage
     params.warmup_steps = args.warmup * steps_per_epoch
 
     input_size = 512
     input_tensor = tf.keras.layers.Input([input_size, input_size, 3])
     conv_tensors = YOLOv3(input_tensor, strides=params.strides, anchors=params.anchors,
-                          num_classes=args.n_classes)
+                          num_classes=args.num_classes)
 
     output_tensors = []
     for i, conv_tensor in enumerate(conv_tensors):
-        pred_tensor = decode(conv_tensor, params.strides, params.anchors, args.n_classes, i)
+        pred_tensor = decode(conv_tensor, params.strides, params.anchors, args.num_classes, i)
         output_tensors.append(conv_tensor)
         output_tensors.append(pred_tensor)
 
@@ -221,25 +224,34 @@ if __name__ == '__main__':
     best_loss = 1e5
 
     # checkpoint = tf.train.Checkpoint(optimizer=optimizer, model=model)
+    ckpt = tf.train.Checkpoint(
+        step=tf.Variable(1), optimizer=optimizer,
+        model=model, iterator=trainset)
+    manager = tf.train.CheckpointManager(ckpt, params.ckpt_save_dir, max_to_keep=args.ckpt_max_keep)
 
-    pbar = tqdm(range(args.n_epoch), desc='==> Epoch', position=0)
+    pbar = tqdm(range(args.num_epochs), desc='==> Epoch', position=0)
     for epoch in pbar:
         with tf.device(device):
             mean_loss = train_step(model, trainset, optimizer, params, args)
 
+        ckpt.step.assign_add(1)
         # checkpoint.save(file_prefix=params.ckpt_save_dir)
         # checkpoint.restore(params.ckpt_save_dir).assert_consumed()
 
         save_epoch = epoch % args.ckpt_interval == 0
-        ckpt_epoch_file = os.path.join(params.ckpt_save_dir, f'epoch_{epoch}.h5')
+        # save_epoch = int(ckpt.step) % args.ckpt_interval == 0
+        # ckpt_epoch_file = os.path.join(params.ckpt_save_dir, f'epoch_{epoch}.h5')
 
         if save_epoch:
-            model.save(ckpt_epoch_file)
+            # model.save(ckpt_epoch_file)
+            save_path = manager.save()
+            print('Saved checkpoint for epoch {} at "{}"'.format(epoch, save_path))
+            # ckpt.restore(manager.latest_checkpoint)
 
-        if mean_loss < best_loss:
-            best_loss = mean_loss
-            best_ckpt_file = os.path.join(params.ckpt_save_dir, 'best_epoch.h5')
-            # if save_epoch:
-            #     shutil.copyfile(ckpt_epoch_file, best_ckpt_file)
-            # else:
-            model.save(best_ckpt_file)
+        # if mean_loss < best_loss:
+        #     best_loss = mean_loss
+        #     # best_ckpt_file = os.path.join(params.ckpt_save_dir, 'best_epoch.h5')
+        #     # if save_epoch:
+        #     #     shutil.copyfile(ckpt_epoch_file, best_ckpt_file)
+        #     # else:
+        #     model.save(best_ckpt_file)

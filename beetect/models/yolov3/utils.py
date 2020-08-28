@@ -194,7 +194,6 @@ def nms(bboxes, iou_threshold, sigma=0.3, method='nms'):
 
 
 def postprocess_boxes(pred_bbox, org_img_shape, input_size, score_threshold):
-
     valid_scale=[0, np.inf]
     pred_bbox = np.array(pred_bbox)
 

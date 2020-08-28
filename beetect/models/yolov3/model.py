@@ -62,6 +62,15 @@ def YOLOv3(input_layer,
     # print(conv_sbbox.shape, conv_mbbox.shape, conv_lbbox.shape)
     return [conv_sbbox, conv_mbbox, conv_lbbox]
 
+    # if training:
+    #     output_tensors = []
+    #     for i, conv_tensor in enumerate([conv_sbbox, conv_mbbox, conv_lbbox]):
+    #         pred_tensor = decode(conv_tensor, strides, anchors, args.num_classes, i)
+    #         output_tensors.append(conv_tensor)
+    #         output_tensors.append(pred_tensor)
+    #
+    #     return tf.keras.Model(input_layer, (conv_sbbox, conv_mbbox, conv_lbbox), name='yolov3')
+
 
 def decode(conv_output, strides, anchors, num_classes=2, i=0):
     """

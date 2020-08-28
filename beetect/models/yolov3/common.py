@@ -1,6 +1,12 @@
 import tensorflow as tf
 
 
+# since pretrained's BatchNorm is named BatchNormalization,
+# stick with BatchNormalization to avoid error while loading
+# as BatchNormalization => batch_normalization
+# while BatchNorm => batch_norm
+# in tf variable name scope
+# class BatchNormalization(tf.keras.layers.BatchNormalization):
 class BatchNorm(tf.keras.layers.BatchNormalization):
     """
     "Frozen state" and "inference mode" are two separate concepts.
@@ -29,6 +35,7 @@ def Conv(input_layer, filters_shape, downsample=False, activate=True, bn=True):
                                   kernel_initializer=tf.random_normal_initializer(stddev=0.01),
                                   bias_initializer=tf.constant_initializer(0.))(input_layer)
 
+    # if bn: conv = BatchNormalization()(conv)
     if bn: conv = BatchNorm()(conv)
     if activate == True: conv = tf.nn.leaky_relu(conv, alpha=0.1)
 
