@@ -223,10 +223,10 @@ if __name__ == '__main__':
 
     best_loss = 1e5
 
-    # checkpoint = tf.train.Checkpoint(optimizer=optimizer, model=model)
+    # all kwargs to Checkpoint should be trackable
     ckpt = tf.train.Checkpoint(
-        step=tf.Variable(1), optimizer=optimizer,
-        model=model, iterator=trainset)
+        epoch=tf.Variable(1), optimizer=optimizer,
+        model=model)
     manager = tf.train.CheckpointManager(ckpt, params.ckpt_save_dir, max_to_keep=args.ckpt_max_keep)
 
     pbar = tqdm(range(args.num_epochs), desc='==> Epoch', position=0)
@@ -234,12 +234,12 @@ if __name__ == '__main__':
         with tf.device(device):
             mean_loss = train_step(model, trainset, optimizer, params, args)
 
-        ckpt.step.assign_add(1)
+        ckpt.epoch.assign_add(1)
         # checkpoint.save(file_prefix=params.ckpt_save_dir)
         # checkpoint.restore(params.ckpt_save_dir).assert_consumed()
 
         save_epoch = epoch % args.ckpt_interval == 0
-        # save_epoch = int(ckpt.step) % args.ckpt_interval == 0
+        # save_epoch = int(ckpt.epoch) % args.ckpt_interval == 0
         # ckpt_epoch_file = os.path.join(params.ckpt_save_dir, f'epoch_{epoch}.h5')
 
         if save_epoch:
