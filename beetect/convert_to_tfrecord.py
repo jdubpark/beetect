@@ -31,16 +31,22 @@ def create_tf_example(data, dataset_classes):
     filename = filename.encode('utf8')
 
     height, width, _ = image.shape
-    height_, width_ = float(height), float(width)
 
     xmins, xmaxs, ymins, ymaxs, classes, classes_text = [], [], [], [], [], []
     for bbox in bboxes:
         xtl, ytl, xbr, ybr, class_id = bbox
         # Normalize coordinates (x / width, y / height)
-        xmins.append(xtl / width_)
-        xmaxs.append(xbr / width_)
-        ymins.append(ybr / height_)
-        ymaxs.append(ytl / height_)
+        xmin, xmax = xtl / width, xbr / width
+        ymin, ymax = ybr / height, ytl / height
+        # swap values if min is bigger than max (for some reason)
+        if xmin > xmax:
+            xmin, xmax = xmax, xmin
+        if ymin > ymax:
+            ymin, ymax = ymax, ymin
+        xmins.append(xmin)
+        xmaxs.append(xmax)
+        ymins.append(ymin)
+        ymaxs.append(ymax)
 
         classes.append(class_id) # class id
         classes_text.append(dataset_classes[class_id].encode('utf8')) # class name
