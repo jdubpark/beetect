@@ -89,18 +89,16 @@ def train_step(model, train_dataset, optimizer, loss_fns, params, args):
     local_steps = 0
 
     pbar = tqdm(range(1, params.dataset_len+1), desc='==> Train', position=1)
-    for idx, (image_data, target) in enumerate(train_dataset):
+    for idx, (images, targets) in enumerate(train_dataset):
         with tf.GradientTape() as tape:
-            outputs = model(image_data, training=True)
-            print(model.losses)
+            outputs = model(images, training=True)
             reg_loss = tf.reduce_sum(model.losses)
             pred_loss = []
 
-            for output, label, loss_fn in zip(outputs, target, loss_fns):
+            for output, label, loss_fn in zip(outputs, targets, loss_fns):
                 pred_loss.append(loss_fn(label, output))
 
-            pred_loss = tf.reduce_sum(pred_loss)
-            total_loss = pred_loss + reg_loss
+            total_loss = tf.reduce_sum(pred_loss) + reg_loss
             grads = tape.gradient(total_loss, model.trainable_variables)
 
         acc_loss += total_loss
@@ -114,8 +112,9 @@ def train_step(model, train_dataset, optimizer, loss_fns, params, args):
         # pbar.set_description('lr {:.6f}'.format(lr))
         pbar.set_postfix({
             'Mean': '{:4.2f}'.format(mean_loss), # accumulated
-            'Pred': '{:4.2f}'.format(pred_loss),
-            'Reg': '{:4.2f}'.format(reg_loss),
+            'GIoU': '{:4.2f}'.format(giou_loss),
+            'Conf': '{:4.2f}'.format(conf_loss),
+            'Prob': '{:4.2f}'.format(prob_loss),
             })
 
         # writing summary data
@@ -124,8 +123,9 @@ def train_step(model, train_dataset, optimizer, loss_fns, params, args):
                 tf.summary.scalar('lr', optimizer.lr, step=params.global_steps)
                 tf.summary.scalar('loss/total_loss', total_loss, step=params.global_steps)
                 tf.summary.scalar('loss/mean_loss', mean_loss, step=params.global_steps)
-                tf.summary.scalar('loss/pred_loss', pred_loss, step=params.global_steps)
-                tf.summary.scalar('loss/reg_loss', reg_loss, step=params.global_steps)
+                tf.summary.scalar('loss/giou_loss', giou_loss, step=params.global_steps)
+                tf.summary.scalar('loss/conf_loss', conf_loss, step=params.global_steps)
+                tf.summary.scalar('loss/prob_loss', prob_loss, step=params.global_steps)
 
             params.writer.flush()
 
@@ -190,7 +190,7 @@ if __name__ == '__main__':
     for record in tf.data.TFRecordDataset(args.dataset_dir):
         dataset_len += 1
 
-    steps_per_epoch = dataset_len
+    args.steps_per_epoch = math.ceil(dataset_len /)
     params.dataset_len = dataset_len
     params.global_steps = 1 # init at 1
     params.total_steps = args.num_epochs * steps_per_epoch
