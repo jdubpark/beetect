@@ -50,6 +50,17 @@ def transform_targets_for_output(y_true, grid_size, anchor_idxs):
 
 
 def transform_targets(y_train, anchors, anchor_masks, size):
+    """
+    Transform targets into DarkNet compatible structure
+
+    return Tuple[
+        [N, 13, 13, 3, 6],
+        [N, 26, 26, 3, 6],
+        [N, 52, 52, 3, 6]]
+
+    where N = num of labels in batch and last dim (of size 6)
+    represents [x, y, w, h, obj, class]
+    """
     y_outs = []
     grid_size = size // 32
 

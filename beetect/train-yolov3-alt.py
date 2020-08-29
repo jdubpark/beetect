@@ -51,7 +51,7 @@ parser.add_argument('--transfer', type=str, default='darknet', help=''+
                     'fine_tune: Transfer all and freeze darknet only')
 
 # hyperparams
-parser.add_argument('--lr_init', type=float, default=1e-3) # 5e-4
+parser.add_argument('--lr_init', type=float, default=5e-4) # 1e-3
 parser.add_argument('--lr_end', type=float, default=1e-6)
 parser.add_argument('--decay', dest='wd', type=float, default=5e-5)
 parser.add_argument('--eps', default=1e-6, type=float) # for adamw
@@ -66,6 +66,8 @@ parser.add_argument('--ckpt_interval', type=int, default=2, help='Checkpoint int
 
 # misc
 parser.add_argument('--ckpt_max_keep', type=int, default=10, help='Maximum number of checkpoints to keep while saving new')
+parser.add_argument('--inspect_dataset', action='store_true')
+parser.add_argument('--shuffle_buffer_size', type=int, default=512)
 
 # shallow
 class Map(dict):
@@ -92,7 +94,6 @@ def train_step(model, train_dataset, optimizer, loss_fns, params, args):
     for idx, (images, targets) in enumerate(train_dataset):
         with tf.GradientTape() as tape:
             outputs = model(images, training=True)
-            print(model.losses)
             reg_loss = tf.reduce_sum(model.losses)
             pred_loss = []
 
@@ -177,18 +178,43 @@ if __name__ == '__main__':
 
     train_dataset = dataset.load_tfrecord_dataset(
         args.dataset_dir, args.class_path, args.image_size)
-    train_dataset = train_dataset.shuffle(buffer_size=512)
+    # train_dataset = train_dataset.shuffle(buffer_size=512)
+    train_dataset = train_dataset.shuffle(buffer_size=args.shuffle_buffer_size)
     train_dataset = train_dataset.batch(args.batch_size)
+
+    # once before mapping for transformation
+    class_names = ['not_bee', 'bee']
+    if args.inspect_dataset:
+        for image, labels in train_dataset.take(1):
+            labels = labels[0]
+            boxes, scores, classes = [], [], []
+            for x1, y1, x2, y2, label in labels:
+                if x1 == 0 and x2 == 0:
+                    continue
+                boxes.append((x1, y1, x2, y2))
+                scores.append(1)
+                classes.append(label)
+            print(f'labels:')
+            for i in range(len(boxes)):
+                print('\t{}, {}, {}, {}'.format(
+                    label, class_names[int(classes[i])], np.array(scores[i]),
+                    np.array(boxes[i]), np.array(boxes[i])*args.image_size))
+
     train_dataset = train_dataset.map(lambda x, y: (
         dataset.transform_images(x, args.image_size),
         dataset.transform_targets(y, params.anchors, params.anchor_masks, args.image_size)))
     train_dataset = train_dataset.prefetch(
         buffer_size=tf.data.experimental.AUTOTUNE)
 
+    if args.inspect_dataset:
+        for image, labels in train_dataset.take(1):
+            labels = labels[0].numpy()
+            print('non-empty labels', labels[labels > 0])
+
     dataset_len = 0
-    # for record in tf.compat.v1.python_io.tf_record_iterator(args.dataset_dir):
     for record in tf.data.TFRecordDataset(args.dataset_dir):
         dataset_len += 1
+
 
     args.steps_per_epoch = math.ceil(dataset_len / args.batch_size)
     params.global_steps = 1 # init at 1
