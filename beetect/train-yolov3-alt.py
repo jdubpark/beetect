@@ -92,13 +92,15 @@ def train_step(model, train_dataset, optimizer, loss_fns, params, args):
     for idx, (image_data, target) in enumerate(train_dataset):
         with tf.GradientTape() as tape:
             outputs = model(image_data, training=True)
+            print(model.losses)
             reg_loss = tf.reduce_sum(model.losses)
             pred_loss = []
 
             for output, label, loss_fn in zip(outputs, target, loss_fns):
                 pred_loss.append(loss_fn(label, output))
 
-            total_loss = tf.reduce_sum(pred_loss) + reg_loss
+            pred_loss = tf.reduce_sum(pred_loss)
+            total_loss = pred_loss + reg_loss
             grads = tape.gradient(total_loss, model.trainable_variables)
 
         acc_loss += total_loss
@@ -112,9 +114,8 @@ def train_step(model, train_dataset, optimizer, loss_fns, params, args):
         # pbar.set_description('lr {:.6f}'.format(lr))
         pbar.set_postfix({
             'Mean': '{:4.2f}'.format(mean_loss), # accumulated
-            'GIoU': '{:4.2f}'.format(giou_loss),
-            'Conf': '{:4.2f}'.format(conf_loss),
-            'Prob': '{:4.2f}'.format(prob_loss),
+            'Pred': '{:4.2f}'.format(pred_loss),
+            'Reg': '{:4.2f}'.format(reg_loss),
             })
 
         # writing summary data
@@ -123,9 +124,8 @@ def train_step(model, train_dataset, optimizer, loss_fns, params, args):
                 tf.summary.scalar('lr', optimizer.lr, step=params.global_steps)
                 tf.summary.scalar('loss/total_loss', total_loss, step=params.global_steps)
                 tf.summary.scalar('loss/mean_loss', mean_loss, step=params.global_steps)
-                tf.summary.scalar('loss/giou_loss', giou_loss, step=params.global_steps)
-                tf.summary.scalar('loss/conf_loss', conf_loss, step=params.global_steps)
-                tf.summary.scalar('loss/prob_loss', prob_loss, step=params.global_steps)
+                tf.summary.scalar('loss/pred_loss', pred_loss, step=params.global_steps)
+                tf.summary.scalar('loss/reg_loss', reg_loss, step=params.global_steps)
 
             params.writer.flush()
 
