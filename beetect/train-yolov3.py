@@ -21,6 +21,7 @@ parser = argparse.ArgumentParser(description='Beetect Yolov3 training')
 parser.add_argument('--dump_dir', '-O', type=str)
 parser.add_argument('--annot_dir', '-A', type=str)
 parser.add_argument('--img_dir', '-I', type=str)
+parser.add_argument('--ckpt_path', '-C', type=str, default=None, help='Checkpoint file to load for training')
 
 # training
 parser.add_argument('--num_epochs', '-e', type=int, default=100, help='Number of epoch')
@@ -46,7 +47,7 @@ parser.add_argument('--val_interval', type=int, default=1, help='Val interval pe
 parser.add_argument('--ckpt_interval', type=int, default=2, help='Checkpoint interval')
 
 # misc
-parser.add_argument('--ckpt_max_keep', type=int, default=10, help='Maximum number of checkpoints to keep while saving new')
+parser.add_argument('--ckpt_max_keep', type=int, default=20, help='Maximum number of checkpoints to keep while saving new')
 
 # shallow
 class Map(dict):
@@ -227,6 +228,17 @@ if __name__ == '__main__':
     ckpt = tf.train.Checkpoint(
         epoch=tf.Variable(1), optimizer=optimizer,
         model=model)
+
+    if args.ckpt_path is not None:
+        # raises error since ckpt_path provides prefix, not the actual file (there .data and .index)
+        # and .meta (if tf.v1 -> saved  graph structure is loaded, not eager)
+        #if not os.path.isfile(args.ckpt_path):
+        #    raise ValueError(f'Invalid checkpoint path, provided "{args.ckpt_path}"')
+
+        ckpt.restore(args.ckpt_path)
+        print(f'Model checkpoint "{os.path.basename(args.ckpt_path)}" restored from "{os.path.dirname(args.ckpt_path)}"')
+
+        
     manager = tf.train.CheckpointManager(ckpt, params.ckpt_save_dir, max_to_keep=args.ckpt_max_keep)
 
     pbar = tqdm(range(args.num_epochs), desc='==> Epoch', position=0)
@@ -238,20 +250,22 @@ if __name__ == '__main__':
         # checkpoint.save(file_prefix=params.ckpt_save_dir)
         # checkpoint.restore(params.ckpt_save_dir).assert_consumed()
 
-        save_epoch = epoch % args.ckpt_interval == 0
+        #save_epoch = epoch % args.ckpt_interval == 0
         # save_epoch = int(ckpt.epoch) % args.ckpt_interval == 0
         # ckpt_epoch_file = os.path.join(params.ckpt_save_dir, f'epoch_{epoch}.h5')
 
-        if save_epoch:
-            # model.save(ckpt_epoch_file)
-            save_path = manager.save()
-            print('Saved checkpoint for epoch {} at "{}"'.format(epoch, save_path))
-            # ckpt.restore(manager.latest_checkpoint)
+        #if save_epoch:
+        # model.save(ckpt_epoch_file)
+        save_path = manager.save(checkpoint_number=epoch)
+        print('Saved checkpoint for epoch {} at "{}"'.format(epoch, save_path))
+        # ckpt.restore(manager.latest_checkpoint)
 
-        # if mean_loss < best_loss:
-        #     best_loss = mean_loss
-        #     # best_ckpt_file = os.path.join(params.ckpt_save_dir, 'best_epoch.h5')
-        #     # if save_epoch:
-        #     #     shutil.copyfile(ckpt_epoch_file, best_ckpt_file)
-        #     # else:
+        if mean_loss < best_loss:
+            best_loss = mean_loss
+            best_ckpt_file = os.path.join(params.ckpt_save_dir, 'best_epoch')
+            for ext in ['.data-00000-of-00001', '.index', '.meta']:
+                if not os.path.isfile(save_path+ext):
+                    continue
+
+                shutil.copyfile(save_path+ext, best_ckpt_file+ext)
         #     model.save(best_ckpt_file)
