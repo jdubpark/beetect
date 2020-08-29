@@ -50,7 +50,7 @@ def yolo_nms(outputs, anchors, masks, num_classes,
         max_output_size_per_class=max_boxes,
         max_total_size=max_boxes,
         iou_threshold=iou_threshold,
-        score_threshold=core_threshold
+        score_threshold=score_threshold
     )
 
     return boxes, scores, num_classes, valid_detections

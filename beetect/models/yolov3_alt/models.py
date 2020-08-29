@@ -1,19 +1,7 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import Model
-from tensorflow.keras.layers import (
-    Add,
-    Concatenate,
-    Conv2D,
-    Input,
-    Lambda,
-    LeakyReLU,
-    MaxPool2D,
-    UpSampling2D,
-    ZeroPadding2D,
-    BatchNormalization,
-)
-from tensorflow.keras.regularizers import l2
+from tensorflow.keras.layers import Input, Lambda
 from tensorflow.keras.losses import (
     binary_crossentropy,
     sparse_categorical_crossentropy
@@ -97,12 +85,15 @@ class YOLOWrapper():
 
 
 class YOLOv3(YOLOWrapper):
-    def __init__(self, size=512, channels=3, num_classes=2, max_boxes=100,
-                 iou_threshold=0.5, score_threshold=0.5, training=True):
+    def __init__(self, size=416, channels=3, num_classes=2, max_boxes=100,
+                 iou_threshold=0.5, score_threshold=0.5, training=True,
+                 anchors=[(10, 13), (16, 30), (33, 23), (30, 61), (62, 45),
+                          (59, 119), (116, 90), (156, 198), (373, 326)],
+                 anchor_masks=[[6, 7, 8], [3, 4, 5], [0, 1, 2]]):
         # size = 416
         super(YOLOv3, self)
 
-        assert isinstance(size, int)
+        assert isinstance(size, int) and size % 32 == 0
 
         self.size = size
         self.channels = channels
@@ -112,14 +103,12 @@ class YOLOv3(YOLOWrapper):
         self.iou_threshold = iou_threshold
         self.score_threshold = score_threshold
 
-        self.anchors = np.array([
-            (10, 13), (16, 30), (33, 23), (30, 61), (62, 45),
-            (59, 119), (116, 90), (156, 198), (373, 326)
-            ], np.float32) / size
-        self.anchor_masks = np.array([[6, 7, 8], [3, 4, 5], [0, 1, 2]])
+        self.anchors = np.array(anchors, np.float32) / size
+        self.anchor_masks = np.array(anchor_masks)
 
     def __call__(self):
         size = self.size
+        channels = self.channels
         anchors = self.anchors
         masks = self.anchor_masks
         num_classes = self.num_classes
@@ -140,18 +129,12 @@ class YOLOv3(YOLOWrapper):
         if self.training:
             return Model(inputs, (output_0, output_1, output_2), name='yolov3')
 
-        boxes_0 = Lambda(lambda x: yolo_boxes(
-            x, anchors[masks[0]], num_classes, max_boxes=self.max_boxes,
-            iou_threshold=self.iou_threshold, score_threshold=self.score_threshold
-            ), name='yolo_boxes_0')(output_0)
-        boxes_1 = Lambda(lambda x: yolo_boxes(
-            x, anchors[masks[1]], num_classes, max_boxes=self.max_boxes,
-            iou_threshold=self.iou_threshold, score_threshold=self.score_threshold
-            ), name='yolo_boxes_1')(output_1)
-        boxes_2 = Lambda(lambda x: yolo_boxes(
-            x, anchors[masks[2]], num_classes, max_boxes=self.max_boxes,
-            iou_threshold=self.iou_threshold, score_threshold=self.score_threshold
-            ), name='yolo_boxes_2')(output_2)
+        boxes_0 = Lambda(lambda x: yolo_boxes(x, anchors[masks[0]], num_classes),
+                         name='yolo_boxes_0')(output_0)
+        boxes_1 = Lambda(lambda x: yolo_boxes(x, anchors[masks[1]], num_classes),
+                         name='yolo_boxes_1')(output_1)
+        boxes_2 = Lambda(lambda x: yolo_boxes(x, anchors[masks[2]], num_classes),
+                         name='yolo_boxes_2')(output_2)
 
         outputs = Lambda(lambda x: yolo_nms(
             x, anchors, masks, num_classes, max_boxes=self.max_boxes,
@@ -162,12 +145,15 @@ class YOLOv3(YOLOWrapper):
 
 
 class YOLOv3Tiny(YOLOWrapper):
-    def __init__(self, size=512, channels=3, num_classes=2, max_boxes=100,
-                 iou_threshold=0.5, score_threshold=0.5, training=True):
+    def __init__(self, size=416, channels=3, num_classes=2, max_boxes=100,
+                 iou_threshold=0.5, score_threshold=0.5, training=True,
+                 anchors=[(10, 14), (23, 27), (37, 58),
+                          (81, 82), (135, 169), (344, 319)],
+                 anchor_masks=[[3, 4, 5], [0, 1, 2]]):
         # size = 416
         super(YOLOv3Tiny, self)
 
-        assert isinstance(size, int)
+        assert isinstance(size, int) and size % 32 == 0
 
         self.size = size
         self.channels = channels
@@ -177,11 +163,8 @@ class YOLOv3Tiny(YOLOWrapper):
         self.iou_threshold = iou_threshold
         self.score_threshold = score_threshold
 
-        self.anchors = np.array([
-            (10, 14), (23, 27), (37, 58),
-            (81, 82), (135, 169), (344, 319)
-            ], np.float32) / size
-        self.anchor_masks = np.array([[3, 4, 5], [0, 1, 2]])
+        self.anchors = np.array(anchors, np.float32) / size
+        self.anchor_masks = np.array(anchor_masks)
 
     def __call__(self):
         size = self.size
@@ -203,14 +186,10 @@ class YOLOv3Tiny(YOLOWrapper):
         if self.training:
             return Model(inputs, (output_0, output_1), name='yolov3')
 
-        boxes_0 = Lambda(lambda x: yolo_boxes(
-            x, anchors[masks[0]], num_classes, max_boxes=self.max_boxes,
-            iou_threshold=self.iou_threshold, score_threshold=self.score_threshold
-            ), name='yolo_boxes_0')(output_0)
-        boxes_1 = Lambda(lambda x: yolo_boxes(
-            x, anchors[masks[1]], num_classes, max_boxes=self.max_boxes,
-            iou_threshold=self.iou_threshold, score_threshold=self.score_threshold
-            ), name='yolo_boxes_1')(output_1)
+        boxes_0 = Lambda(lambda x: yolo_boxes(x, anchors[masks[0]], num_classes),
+                         name='yolo_boxes_0')(output_0)
+        boxes_1 = Lambda(lambda x: yolo_boxes(x, anchors[masks[1]], num_classes),
+                         name='yolo_boxes_1')(output_1)
 
         outputs = Lambda(lambda x: yolo_nms(
             x, anchors, masks, num_classes, max_boxes=self.max_boxes,

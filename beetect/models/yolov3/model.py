@@ -20,7 +20,9 @@ def YOLOv3(input_layer,
            anchors=[1.25,1.625, 2.0,3.75, 4.125,2.875, 1.875,3.8125, 3.875,2.8125, 3.6875,7.4375, 3.625,2.8125, 4.875,6.1875, 11.65625,10.1875],
            strides=[8, 16, 32]):
     n_ch = num_classes + 5
-    route_1, route_2, conv_out = darknet53(input_layer)
+    # route 1 -> x_36
+    # route 2 -> x_61
+    x_36, x_65, conv_out = darknet53(input_layer)
 
     conv_out = Conv(conv_out, (1, 1, 1024,  512))
     conv_out = Conv(conv_out, (3, 3,  512, 1024))
@@ -34,7 +36,7 @@ def YOLOv3(input_layer,
     conv_out = Conv(conv_out, (1, 1,  512,  256))
     conv_out = Upsample(conv_out)
 
-    conv_out = tf.concat([conv_out, route_2], axis=-1)
+    conv_out = tf.concat([conv_out, x_65], axis=-1)
 
     conv_out = Conv(conv_out, (1, 1, 768, 256))
     conv_out = Conv(conv_out, (3, 3, 256, 512))
@@ -48,7 +50,7 @@ def YOLOv3(input_layer,
     conv_out = Conv(conv_out, (1, 1, 256, 128))
     conv_out = Upsample(conv_out)
 
-    conv_out = tf.concat([conv_out, route_1], axis=-1)
+    conv_out = tf.concat([conv_out, x_36], axis=-1)
 
     conv_out = Conv(conv_out, (1, 1, 384, 128))
     conv_out = Conv(conv_out, (3, 3, 128, 256))

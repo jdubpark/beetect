@@ -36,8 +36,10 @@ def Conv(input_layer, filters_shape, downsample=False, activate=True, bn=True):
                                   bias_initializer=tf.constant_initializer(0.))(input_layer)
 
     # if bn: conv = BatchNormalization()(conv)
-    if bn: conv = BatchNorm()(conv)
-    if activate == True: conv = tf.nn.leaky_relu(conv, alpha=0.1)
+    if bn:
+        conv = BatchNorm()(conv)
+    if activate == True:
+        conv = tf.nn.leaky_relu(conv, alpha=0.1)
 
     return conv
 

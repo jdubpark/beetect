@@ -1,5 +1,11 @@
+import cv2
+import os
+import random
+import string
+import xml.etree.cElementTree as ET
+
+import numpy as np
 import tensorflow as tf
-from absl.flags import FLAGS
 
 @tf.function
 def transform_targets_for_output(y_true, grid_size, anchor_idxs):
@@ -98,7 +104,7 @@ IMAGE_FEATURE_MAP = {
 }
 
 
-def parse_tfrecord(tfrecord, class_table, size):
+def parse_tfrecord(tfrecord, class_table, size, yolo_max_boxes=100):
     x = tf.io.parse_single_example(tfrecord, IMAGE_FEATURE_MAP)
     x_train = tf.image.decode_jpeg(x['image/encoded'], channels=3)
     x_train = tf.image.resize(x_train, (size, size))
@@ -112,7 +118,7 @@ def parse_tfrecord(tfrecord, class_table, size):
                         tf.sparse.to_dense(x['image/object/bbox/ymax']),
                         labels], axis=1)
 
-    paddings = [[0, FLAGS.yolo_max_boxes - tf.shape(y_train)[0]], [0, 0]]
+    paddings = [[0, yolo_max_boxes - tf.shape(y_train)[0]], [0, 0]]
     y_train = tf.pad(y_train, paddings)
 
     return x_train, y_train

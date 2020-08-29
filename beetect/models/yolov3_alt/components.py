@@ -1,4 +1,6 @@
 import tensorflow as tf
+from tensorflow.keras import Model
+from tensorflow.keras.regularizers import l2
 from tensorflow.keras.layers import (
     Add,
     Concatenate,

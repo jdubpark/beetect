@@ -47,7 +47,7 @@ class BeeDataset(Dataset):
         # if is_empty is False:
         #     print('Not empty at all')
 
-        self.ext = '.' + ext
+        self.ext = ext if ext[0] == '.' else '.'+ext
 
     def __len__(self):
         return len(self.frame_lists)
