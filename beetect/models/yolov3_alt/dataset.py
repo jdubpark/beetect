@@ -135,13 +135,29 @@ def parse_tfrecord(tfrecord, class_table, size, yolo_max_boxes=100):
     return x_train, y_train
 
 
-def load_tfrecord_dataset(file_pattern, class_file, size=416):
+def load_tfrecord_dataset(file_pattern, class_file, size=416, sharded=True):
     LINE_NUMBER = -1  # TODO: use tf.lookup.TextFileIndex.LINE_NUMBER
     class_table = tf.lookup.StaticHashTable(tf.lookup.TextFileInitializer(
         class_file, tf.string, 0, tf.int64, LINE_NUMBER, delimiter="\n"), -1)
 
+    # e.g. load 'dataset.tfrecord'
+    # for shards, pattern should be:
+    # /path/to/train_dataset.record-?????-of-x, where is number of shards
+    #   fixed to 5 digits (e.g. 5 shards -> 00005)
     files = tf.data.Dataset.list_files(file_pattern)
-    dataset = files.flat_map(tf.data.TFRecordDataset)
+    if sharded:
+        # https://www.tensorflow.org/api_docs/python/tf/data/Dataset#interleave
+        # processing shards
+        dataset = files.interleave(
+            tf.data.TFRecordDataset,
+            cycle_length=1, # number of input elements that are processed concurrently
+            num_parallel_calls=tf.data.experimental.AUTOTUNE
+        )
+        # cycle_length = 1 acts as flat_map
+        # dataset = files.flat_map(tf.data.TFRecordDataset)
+    else:
+        dataset = files.flat_map(tf.data.TFRecordDataset)
+
     return dataset.map(lambda x: parse_tfrecord(x, class_table, size))
 
 

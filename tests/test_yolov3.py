@@ -17,7 +17,7 @@ parser.add_argument('--ckpt_path', '-C', type=str, help='Checkpoint file path')
 parser.add_argument('--img', '-I', type=str, help='Image file path (mutually exclusive to video)')
 # parser.add_argument('--vid', '-V', type=str, help='Path to video file (mutually exclusive to video)')
 parser.add_argument('--input_size', '-size', type=int, default=512)
-parser.add_argument('--n_class', type=int, default=2)
+parser.add_argument('--num_classes', type=int, default=2)
 parser.add_argument('--score_threshold', '-score', type=float, default=0.3, help='Obj score (confidence) threshold')
 parser.add_argument('--iou_threshold', '-iou', type=float, default=0.45, help='Min IoU threshold for NMS')
 
@@ -34,7 +34,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     in_size = args.input_size
 
-    anchors = [1.25,1.625, 2.0,3.75, 4.125,2.875, 1.875,3.8125, 3.875,2.8125, 3.6875,7.4375, 3.625,2.8125, 4.875,6.1875, 11.65625,10.1875]
+    # baseline anchors
+    # anchors = [1.25,1.625, 2.0,3.75, 4.125,2.875, 1.875,3.8125, 3.875,2.8125, 3.6875,7.4375, 3.625,2.8125, 4.875,6.1875, 11.65625,10.1875]
+    # coco anchors
+    anchors = [10,13, 16,30, 33,23, 30,61, 62,45, 59,119, 116,90,  156,198,  373,326]
     strides = [8, 16, 32]
     classes = ['bee']
 
@@ -52,11 +55,11 @@ if __name__ == '__main__':
 
     # create keras model
     input_layer = tf.keras.layers.Input([in_size, in_size, 3])
-    feat_maps = YOLOv3(input_layer, num_classes=args.n_class,
+    feat_maps = YOLOv3(input_layer, num_classes=args.num_classes,
                        anchors=anchors, strides=strides)
     bbox_tensors = []
     for i, feat_map in enumerate(feat_maps):
-        bbox_tensor = decode(feat_map, strides, anchors, args.n_class, i)
+        bbox_tensor = decode(feat_map, strides, anchors, args.num_classes, i)
         bbox_tensors.append(bbox_tensor)
 
     model = tf.keras.Model(input_layer, bbox_tensors)

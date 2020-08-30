@@ -3,8 +3,10 @@
 #
 
 import argparse
+import contextlib2
 import os
 import random
+import math
 import string
 import xml.etree.cElementTree as ET
 from tqdm import tqdm
@@ -14,15 +16,21 @@ import numpy as np
 import tensorflow as tf
 
 from beetect.tf_utils import dataset_util
+from beetect.tf_utils import tf_record_creation_util
 
 
 parser = argparse.ArgumentParser(description='Convert dataset into TFRecord file format')
 parser.add_argument('--img_dir', '-I', type=str)
 parser.add_argument('--annot_dir', '-A', type=str)
-parser.add_argument('--out_dir', '-O', help='Directory to dump converted TFRecord')
+parser.add_argument('--out_file', '-O', help='Directory to dump converted TFRecord')
+parser.add_argument('--no_shard', action='store_true')
+parser.add_argument('--shard_size', type=int, default=1000, help='Number of images per shard')
 
 
-def create_tf_example(data, dataset_classes):
+dataset_classes = ['background', 'bee']
+
+
+def create_tf_example(data):
     filename, bboxes = data
 
     # load as encoded bytes
@@ -76,26 +84,33 @@ def create_tf_example(data, dataset_classes):
 
 class Dataset(object):
     def __init__(self, annot_dir, img_dir, size=416, ext='jpg', shuffle=True):
-        folder_list = [f for f in os.listdir(img_dir) if not f.startswith('.')]
+        # it's easier to move around annot files than whole frame folders
+        # so start with available annot files
+        # folder_list = [f for f in os.listdir(img_dir) if not f.startswith('.')]
+        annot_list = [f for f in os.listdir(annot_dir) if not f.startswith('.')]
 
         self.ext = ext if ext[0] == '.' else '.'+ext
         self.annot_lists = {}
         self.img_dirs = {}
 
-        for folder_name in folder_list:
-            folder_dir = os.path.join(img_dir, folder_name)
+        skip_non_keyframes = ['hive-1']
 
-            # folder name is annot file name
-            annot_file = os.path.join(annot_dir, folder_name + '.xml')
-            annots, rand_prefix = self.load_annotations(annot_file)
+        for annot_file in annot_list:
+            filename = os.path.splitext(annot_file)[0] # rid of ext
+            print(f'Loading {filename}')
+            annot_path = os.path.join(annot_dir, annot_file) # need ext
+            img_path = os.path.join(img_dir, filename)
+            annots, rand_prefix = self.load_annotations(annot_path, filename in skip_non_keyframes)
 
             # weed out empty frame annots or path-not-found ones
             annots = {k: v for k, v in annots.items() if len(v) != 0
-                      and os.path.isfile(os.path.join(folder_dir, k.split('_')[1] + self.ext))}
+                      and os.path.isfile(os.path.join(img_path, k.split('_')[1] + self.ext))}
 
             self.annot_lists.update(annots)
-            self.img_dirs[rand_prefix] = folder_dir
+            # unique rand_prefix acts as a cursor to its loaded img_dir
+            self.img_dirs[rand_prefix] = img_path
 
+        print(f'Loaded all data!')
         self.frame_lists = [f for f in self.annot_lists.keys()]
 
         if shuffle:
@@ -116,7 +131,10 @@ class Dataset(object):
 
         return frame_path, boxes
 
-    def load_annotations(self, annot_file):
+    def load_annotations(self, annot_file,
+                         skip_outside=True,
+                         skip_occluded=True,
+                         skip_non_keyframes=False):
         tree = ET.parse(annot_file)
         root = tree.getroot()
         annot_frames = {}
@@ -125,66 +143,97 @@ class Dataset(object):
         rand_prefix = ''.join(random.choices(string.ascii_letters + string.digits, k=prefix_len))
 
         tracks = [c for c in root if c.tag == 'track']
-        for track in tracks:
-            obj_id = track.attrib['id'] # assigned object id across all frames
-            # box is essentially an annotated frame (of an object)
-            for box in track:
-                attr = box.attrib
+        images = [c for c in root if c.tag == 'image']
 
-                # skip object outside the frame (include occluded)
-                if attr['outside'] != '0':
-                    continue
+        if len(tracks) > 0:
+            for track in tracks:
+                obj_id = track.attrib['id'] # assigned object id across all frames
+                # box is essentially an annotated frame (of an object)
+                for box in track:
+                    attr = box.attrib
 
-                frame = attr['frame'] # annotated frame id
-                pframe = '{}_{}'.format(rand_prefix, frame) # _ separater
-                # bbox position top left, bottom right
-                obj_label = 1 # one label only
-                bbox = list(map(float, [attr['xtl'], attr['ytl'], attr['xbr'], attr['ybr']]))
-                bbox.append(obj_label) # obj_label is int
+                    if (skip_outside and attr['outside'] == '1') or \
+                        (skip_occluded and attr['occluded'] == '1') or \
+                        (skip_non_keyframes and attr['keyframe']) == '0':
+                        continue
 
-                # set up frame obj in frames
-                if pframe not in annot_frames:
-                    annot_frames[pframe] = []
+                    pframe, bbox = self.annot_box(attr, rand_prefix)
+                    # set up frame obj in frames
+                    if pframe not in annot_frames:
+                        annot_frames[pframe] = []
+                    annot_frames[pframe].append(bbox)
 
-                annot_frames[pframe].append(bbox)
+        elif len(images) > 0:
+            for img in images:
+                img_id = img.attrib['id']
+                # basename with extension (image file name)
+                img_bname = os.path.basename(img.attrib['name'])
+
+                for box in img:
+                    attr = box.attrib
+
+                    # no keyframe or outside for images
+                    if skip_occluded and attr['occluded'] == '1':
+                        continue
+
+                    pframe, bbox = self.annot_box(attr, rand_prefix, img_bname)
+                    # set up frame obj in frames
+                    if pframe not in annot_frames:
+                        annot_frames[pframe] = []
+                    annot_frames[pframe].append(bbox)
+
+        else:
+            raise ValueError(f'Annot file does not contain any annotation, provided "{annot_file}"')
 
         return annot_frames, rand_prefix
+
+    def annot_box(self, attr, rand_prefix, frame=None):
+        """
+        attr -> attrib of each child loaded from annot file
+        rand_prefix -> unique classifier for each annot file (since frame name duplicates, e.g. 0.jpg, 1.jpg)
+        frame -> frame name later needed to load the image '{frame}.jpg'
+                 provide if using cvat image format, where all boxes are of one image,
+                 else, leave it blank to use attr['frame'] (of cvat video)
+        """
+        if frame is None:
+            frame = attr['frame'] # annotated frame id (for cvat video)
+
+        pframe = '{}_{}'.format(rand_prefix, frame) # _ separater
+        # bbox position top left, bottom right
+        obj_label = 1 # one label only
+        bbox = list(map(float, [attr['xtl'], attr['ytl'], attr['xbr'], attr['ybr']]))
+        bbox.append(obj_label) # obj_label is int
+        return pframe, bbox
 
 
 if __name__ == '__main__':
     args = parser.parse_args()
 
-    # os.path.dirname(args.out_dir)
-    for dir in [args.img_dir, args.annot_dir]:
+    # out_file
+    for dir in [args.img_dir, args.annot_dir, os.path.dirname(args.out_file)]:
         assert os.path.isdir(dir)
 
-    writer = tf.io.TFRecordWriter(args.out_dir)
-
-    # TODO(user): Write code to read in your dataset to examples variable
     dataset = Dataset(annot_dir=args.annot_dir, img_dir=args.img_dir)
-    dataset_classes = ['background', 'bee']
-
     pbar = tqdm(dataset, desc='==> Converting', position=0)
-    for data in pbar:
-        tf_data = create_tf_example(data, dataset_classes)
-        writer.write(tf_data.SerializeToString())
 
-    writer.close()
+    if args.no_shard:
+        writer = tf.io.TFRecordWriter(args.out_file)
+        for data in pbar:
+            tf_example = create_tf_example(data)
+            writer.write(tf_example.SerializeToString())
+        writer.close()
 
+    else:
+        output_filebase = args.out_file
+        num_shards = math.ceil(len(dataset) / args.shard_size)
+        # shard data
+        with contextlib2.ExitStack() as tf_record_close_stack:
+            output_tfrecords = tf_record_creation_util.open_sharded_output_tfrecords(
+                tf_record_close_stack, output_filebase, num_shards)
 
-#
-# shard data
-#
-# import contextlib2
-# from object_detection.dataset_tools import tf_record_creation_util
-#
-# num_shards=10
-# output_filebase='/path/to/train_dataset.record'
-#
-# with contextlib2.ExitStack() as tf_record_close_stack:
-#   output_tfrecords = tf_record_creation_util.open_sharded_output_tfrecords(
-#       tf_record_close_stack, output_filebase, num_shards)
-#   for index, example in examples:
-#     tf_example = create_tf_example(example)
-#     output_shard_index = index % num_shards
-#     output_tfrecords[output_shard_index].write(tf_example.SerializeToString())
+            idx = 0
+            for data in pbar:
+                tf_example = create_tf_example(data)
+                output_shard_index = idx % num_shards
+                output_tfrecords[output_shard_index].write(tf_example.SerializeToString())
+                idx += 1

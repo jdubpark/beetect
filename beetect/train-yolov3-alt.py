@@ -51,7 +51,7 @@ parser.add_argument('--transfer', type=str, default='darknet', help=''+
                     'fine_tune: Transfer all and freeze darknet only')
 
 # hyperparams
-parser.add_argument('--lr_init', type=float, default=5e-4) # 1e-3
+parser.add_argument('--lr_init', type=float, default=1e-3)
 parser.add_argument('--lr_end', type=float, default=1e-6)
 parser.add_argument('--decay', dest='wd', type=float, default=5e-5)
 parser.add_argument('--eps', default=1e-6, type=float) # for adamw
@@ -177,9 +177,17 @@ if __name__ == '__main__':
 
 
     train_dataset = dataset.load_tfrecord_dataset(
-        args.dataset_dir, args.class_path, args.image_size)
+        args.dataset_dir, args.class_path, args.image_size, sharded=True)
+
+    # get len before performing more to the dataset
+    dataset_len = 0
+    for record in train_dataset:
+        dataset_len += 1
+
     # train_dataset = train_dataset.shuffle(buffer_size=512)
     train_dataset = train_dataset.shuffle(buffer_size=args.shuffle_buffer_size)
+    # https://www.tensorflow.org/guide/function#batching
+    # batch before map
     train_dataset = train_dataset.batch(args.batch_size)
 
     # once before mapping for transformation
@@ -203,18 +211,14 @@ if __name__ == '__main__':
     train_dataset = train_dataset.map(lambda x, y: (
         dataset.transform_images(x, args.image_size),
         dataset.transform_targets(y, params.anchors, params.anchor_masks, args.image_size)))
-    train_dataset = train_dataset.prefetch(
-        buffer_size=tf.data.experimental.AUTOTUNE)
+    # overlaps the preprocessing and model execution of a training step
+    # -> when training step s, the input pipeline reads the data for step s+1
+    train_dataset = train_dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
     if args.inspect_dataset:
         for image, labels in train_dataset.take(1):
             labels = labels[0].numpy()
             print('non-empty labels', labels[labels > 0])
-
-    dataset_len = 0
-    for record in tf.data.TFRecordDataset(args.dataset_dir):
-        dataset_len += 1
-
 
     args.steps_per_epoch = math.ceil(dataset_len / args.batch_size)
     params.global_steps = 1 # init at 1
