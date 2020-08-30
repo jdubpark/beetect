@@ -51,11 +51,7 @@ parser.add_argument('--transfer', type=str, default='darknet', help=''+
                     'fine_tune: Transfer all and freeze darknet only')
 
 # hyperparams
-<<<<<<< Updated upstream
-parser.add_argument('--lr_init', type=float, default=1e-3)
-=======
 parser.add_argument('--lr_init', type=float, default=1e-3) # 5e-4
->>>>>>> Stashed changes
 parser.add_argument('--lr_end', type=float, default=1e-6)
 parser.add_argument('--decay', dest='wd', type=float, default=5e-5)
 parser.add_argument('--eps', default=1e-6, type=float) # for adamw
