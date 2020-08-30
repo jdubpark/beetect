@@ -51,7 +51,11 @@ parser.add_argument('--transfer', type=str, default='darknet', help=''+
                     'fine_tune: Transfer all and freeze darknet only')
 
 # hyperparams
+<<<<<<< Updated upstream
 parser.add_argument('--lr_init', type=float, default=1e-3)
+=======
+parser.add_argument('--lr_init', type=float, default=1e-3) # 5e-4
+>>>>>>> Stashed changes
 parser.add_argument('--lr_end', type=float, default=1e-6)
 parser.add_argument('--decay', dest='wd', type=float, default=5e-5)
 parser.add_argument('--eps', default=1e-6, type=float) # for adamw
@@ -94,7 +98,10 @@ def train_step(model, train_dataset, optimizer, loss_fns, params, args):
     for idx, (images, targets) in enumerate(train_dataset):
         with tf.GradientTape() as tape:
             outputs = model(images, training=True)
+            #reg_loss = tf.reduce_mean(model.losses)
             reg_loss = tf.reduce_sum(model.losses)
+            #reg_loss = tf.where(tf.math.is_nan(model.losses), tf.zeros_like(model.losses), model.losses)
+            #reg_loss = tf.reduce_sum(reg_loss)
             pred_loss = []
 
             for output, label, loss_fn in zip(outputs, targets, loss_fns):
@@ -136,6 +143,8 @@ def train_step(model, train_dataset, optimizer, loss_fns, params, args):
 
     # at last of each epoch
     pbar.close()
+
+    return mean_loss
 
 
 def val_step():
