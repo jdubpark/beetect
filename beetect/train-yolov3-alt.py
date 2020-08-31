@@ -189,7 +189,6 @@ if __name__ == '__main__':
     for record in train_dataset:
         dataset_len += 1
 
-    # train_dataset = train_dataset.shuffle(buffer_size=512)
     train_dataset = train_dataset.shuffle(buffer_size=args.shuffle_buffer_size)
     # https://www.tensorflow.org/guide/function#batching
     # batch before map

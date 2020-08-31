@@ -88,11 +88,11 @@ if __name__ == '__main__':
     frozen_func = convert_variables_to_constants_v2(full_model)
     frozen_func.graph.as_graph_def()
 
-    layers = [op.name for op in frozen_func.graph.get_operations()]
+    ops = frozen_func.graph.get_operations()
     print('-' * 20)
     print('Frozen model layers: ')
-    for layer in layers:
-        print('\t', layer)
+    for op in ops:
+        print('\t', op.name)
 
     tf.io.write_graph(graph_or_graph_def=frozen_func.graph,
                       logdir=args.save_path,

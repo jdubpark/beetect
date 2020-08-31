@@ -93,14 +93,19 @@ class Dataset(object):
         self.annot_lists = {}
         self.img_dirs = {}
 
-        skip_non_keyframes = ['hive-1']
+        skip_non_keyframes = []
+        # skip_non_keyframes = ['hive-1', 'short-1', 'short-2', 'short-3', 'short-4',
+        #                       'short-5', 'short-6', 'short-7', 'short-8', 'shorty-9']
+        treat_as_vid_images = ['short-3']
 
         for annot_file in annot_list:
             filename = os.path.splitext(annot_file)[0] # rid of ext
             print(f'Loading {filename}')
             annot_path = os.path.join(annot_dir, annot_file) # need ext
             img_path = os.path.join(img_dir, filename)
-            annots, rand_prefix = self.load_annotations(annot_path, filename in skip_non_keyframes)
+            annots, rand_prefix = self.load_annotations(
+                annot_path, skip_non_keyframes=(filename in skip_non_keyframes),
+                treat_as_vid_images=(filename in treat_as_vid_images))
 
             # weed out empty frame annots or path-not-found ones
             annots = {k: v for k, v in annots.items() if len(v) != 0
@@ -134,7 +139,8 @@ class Dataset(object):
     def load_annotations(self, annot_file,
                          skip_outside=True,
                          skip_occluded=True,
-                         skip_non_keyframes=False):
+                         skip_non_keyframes=False,
+                         treat_as_vid_images=False):
         tree = ET.parse(annot_file)
         root = tree.getroot()
         annot_frames = {}
@@ -167,7 +173,10 @@ class Dataset(object):
             for img in images:
                 img_id = img.attrib['id']
                 # basename with extension (image file name)
-                img_bname = os.path.basename(img.attrib['name'])
+                if treat_as_vid_images:
+                    frame_name = img_id
+                else:
+                    frame_name = os.path.basename(img.attrib['name'])
 
                 for box in img:
                     attr = box.attrib
@@ -176,7 +185,7 @@ class Dataset(object):
                     if skip_occluded and attr['occluded'] == '1':
                         continue
 
-                    pframe, bbox = self.annot_box(attr, rand_prefix, img_bname)
+                    pframe, bbox = self.annot_box(attr, rand_prefix, frame_name)
                     # set up frame obj in frames
                     if pframe not in annot_frames:
                         annot_frames[pframe] = []
