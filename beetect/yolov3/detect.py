@@ -2,6 +2,7 @@ import argparse
 import time
 import os
 import logging
+from tqdm import tqdm
 
 import cv2
 import numpy as np
@@ -22,6 +23,7 @@ parser.add_argument('--size', type=int, default=416)
 parser.add_argument('--image', '--img', type=str, help='path to input image')
 parser.add_argument('--video', '--vid', type=str, help='path to input video')
 parser.add_argument('--output', '--out', type=str, help='path to output image/video')
+parser.add_argument('--deb', action='store_true', help='Debian/Ubuntu for display')
 
 
 def detect_image(model, img_raw, args):
@@ -33,13 +35,14 @@ def detect_image(model, img_raw, args):
     boxes, scores, classes, nums = model(img)
     dur = t1 - time.time()
 
-    print('Time: {:4f}\nFPS: {:.2f}'.format(dur, 1.0/dur))
+    if not args.silent:
+        print('Time: {:4f}\nFPS: {:.2f}'.format(dur, 1.0/dur))
 
-    print('Detection:')
-    for i in range(nums[0]):
-        print('\t{}, {}, {}'.format(class_names[int(classes[0][i])],
-                                           np.array(scores[0][i]),
-                                           np.array(boxes[0][i])))
+        print('Detection:')
+        for i in range(nums[0]):
+            print('\t{}, {}, {}'.format(class_names[int(classes[0][i])],
+                                               np.array(scores[0][i]),
+                                               np.array(boxes[0][i])))
 
     img = cv2.cvtColor(img_raw, cv2.COLOR_RGB2BGR)
     img = draw_outputs(img, (boxes, scores, classes, nums), class_names)
@@ -49,6 +52,10 @@ def detect_image(model, img_raw, args):
 
 if __name__ == '__main__':
     args = parser.parse_args()
+    args.silent = False
+
+    if args.deb:
+        os.environ['DISPLAY'] = ':0'
 
     with open(args.classes, 'r') as f:
         class_names = [c.strip() for c in f.readlines()]
@@ -71,6 +78,9 @@ if __name__ == '__main__':
     ckpt.restore(args.weights).expect_partial()
     print(f'Weights loaded from {args.weights}')
 
+    if args.output:
+        args.silent = True
+
     if args.image:
         assert os.path.isfile(args.image)
 
@@ -88,13 +98,21 @@ if __name__ == '__main__':
         cap = cv2.VideoCapture(args.video)
         frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        frame_len = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-        silence = False
         if args.output:
-            silence = True
-            out = cv2.VideoWriter('outpy.avi',cv2.VideoWriter_fourcc('M','J','P','G'), 10, (frame_width,frame_height))
+            assert os.path.isdir(os.path.dirname(args.output))
+            out = cv2.VideoWriter(args.output,cv2.VideoWriter_fourcc('M','J','P','G'), 10, (frame_width,frame_height))
+
+        if frame_len < 1:
+            raise ValueError('Frame length is invalid')
 
         times = []
+        time.sleep(1)
+        if not cap.isOpened():
+            raise ValueError('Cap is not opened')
+
+        pbar = tqdm(range(frame_len), desc='==> Frames')
         while (cap.isOpened()):
             ret, img = cap.read()
             if not ret:
@@ -116,9 +134,12 @@ if __name__ == '__main__':
                 cv2.imshow('Detect', img_bbox)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
+            
+            pbar.update()
 
         cap.release()
         if args.output:
             out.release()
 
-    cv2.destroyAllWindows()
+    if not args.output:
+        cv2.destroyAllWindows()
