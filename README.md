@@ -1,3 +1,9 @@
+# Beetect
+
+***Detecting and tracking honeybees***
+
+Watch the [sample video](https://drive.google.com/file/d/1UqFB-nSua-if6lOqO-vTtg23VreHf8W6/view?usp=sharing) ran on the trained model.
+
 ## Recommended paths:
 
 #### NVIDIA docker
