@@ -11,7 +11,7 @@ setup(
         'imgaug',
         'pandas',
         'easydict',
-        'numpy==1.18.0', # tf 2.3.0
+        'numpy==1.22.0', # tf 2.3.0
         'scipy==1.4.1', # tf 2.3.0
         'matplotlib',
         'Cython',
