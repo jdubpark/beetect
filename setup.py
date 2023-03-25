@@ -22,7 +22,7 @@ setup(
         'albumentations',
         'torch',
         'torchvision',
-        'tensorflow==2.3.0',
+        'tensorflow==2.11.1',
         'tensorflow_addons',
         'tensorboard>=2.2.1',
         # 'horovod', # manual installation required, see master README
